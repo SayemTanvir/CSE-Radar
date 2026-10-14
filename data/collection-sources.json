@@ -3,6 +3,17 @@
   "description": "Public discovery sources. Output is unreviewed leads, never a published event feed. Exact hosts also restrict every redirect and linked-page fetch.",
   "sources": [
     {
+      "id": "eventifybd",
+      "url": "https://api.eventifybd.com/events",
+      "listingUrl": "https://eventifybd.com/",
+      "allowedHosts": ["api.eventifybd.com", "eventifybd.com"],
+      "adapter": "eventifybd",
+      "country": "Bangladesh",
+      "maxLinkedPages": 0,
+      "maxCandidates": 100,
+      "notes": "Community aggregator. Anonymous endpoint used by the public calendar frontend, not a documented supported API. Reads one response only. Excludes Business Case and unrelated general activities; Other/Fest need title/description technology relevance. Keeps source listing and provided event links without fetching them or treating them as official. Dates/deadlines are unreviewed and retain supplied precision. Excludes past entries using end date, or start if end is absent, relative to observed Bangladesh calendar day; missing-date leads remain partial."
+    },
+    {
       "id": "mlh-2027",
       "url": "https://mlh.io/seasons/2027/events",
       "allowedHosts": ["mlh.io", "www.mlh.com"],

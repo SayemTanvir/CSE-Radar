@@ -5,7 +5,7 @@ The JSON files written to artifacts/ are NOT an extension feed. A maintainer mus
 review source details and add approved events to data/events.json separately.
 """
 import argparse
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 from html.parser import HTMLParser
 import ipaddress
@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 import time
 from urllib.error import HTTPError
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, HTTPRedirectHandler, build_opener
 import xml.etree.ElementTree as ET
 
@@ -79,7 +79,7 @@ def read_response(response):
 
 def fetch(url, hosts):
     url = allowed_url(url, hosts)
-    request = Request(url, headers={'User-Agent': USER_AGENT, 'Accept': 'text/html, application/atom+xml, application/rss+xml, application/xml', 'Accept-Encoding': 'identity'})
+    request = Request(url, headers={'User-Agent': USER_AGENT, 'Accept': 'application/json, text/html, application/atom+xml, application/rss+xml, application/xml', 'Accept-Encoding': 'identity'})
     with build_opener(SafeRedirect(hosts)).open(request, timeout=TIMEOUT) as response:
         final_url = allowed_url(response.geturl(), hosts)
         return read_response(response), final_url
@@ -172,9 +172,9 @@ def make_candidate(fields, source, source_url, observed_at):
         'id': 'candidate-' + hashlib.sha256((url + '|' + title + '|' + str(start)).encode()).hexdigest()[:16],
         'reviewStatus': 'unreviewed', 'sourceId': source['id'],
         'sourceUrl': source_url, 'observedAt': observed_at,
-        'title': title, 'url': url, 'category': source.get('category'),
+        'title': title, 'url': url, 'category': fields.get('category') or source.get('category'),
         'organizer': clean(fields.get('organizer'), 250) or None,
-        'start': start, 'end': end, 'deadline': None,
+        'start': start, 'end': end, 'deadline': event_date(fields.get('deadline')),
         'description': clean(fields.get('description')) or None,
         'country': fields.get('country') or source.get('country'),
         'mode': fields.get('mode'),
@@ -257,6 +257,109 @@ def parse_feed(text, source, source_url, observed_at):
     return found, links, []
 
 
+TECH_TERMS = re.compile(
+    r'\b(?:cse|ict|ai|iot|ctf|icpc|iupc|ncpc|ieee|stem)\b|\bit fest\b|information technology|'
+    r'computer|computing|software|coding|programming|hackathon|game.?jam|'
+    r'robot|technology|tech.?fest|techtron|datathon|cyber|data science|'
+    r'machine learning|open.source|devfest|dev days|devin|compute|github', re.IGNORECASE)
+UNRELATED_TERMS = re.compile(r'\b(?:business case|chess|rubik|esports|poster design|3 minute thesis|media.{0,5}communication)\b', re.IGNORECASE)
+
+
+def eventify_category(item):
+    """Keep technology leads while excluding business/general campus activities."""
+    kind = clean(item.get('event_type'), 100).casefold()
+    direct = {'hackathon': 'hackathon', 'ctf': 'contest', 'datathon': 'contest',
+              'cp': 'contest', 'contest': 'contest', 'competitive programming': 'contest',
+              'icpc': 'contest', 'iupc': 'contest', 'ncpc': 'contest'}
+    if kind in ('business case', 'business-case', 'business'):
+        return None, 'business'
+    if kind in direct:
+        return direct[kind], None
+    title = clean(item.get('event_title'))
+    description = clean(item.get('event_description') or item.get('description'))
+    text = title + ' ' + description
+    if UNRELATED_TERMS.search(title) or not TECH_TERMS.search(text):
+        return None, 'unrelated'
+    # A technology festival may also offer esports or poster competitions.
+    # Ancillary activities do not make the whole technology event unrelated.
+    if UNRELATED_TERMS.search(description) and not TECH_TERMS.search(title):
+        return None, 'unrelated'
+    if kind in ('fest', 'festival', 'tech fest'):
+        return 'fest', None
+    for pattern, category in [(r'game.?jam', 'gamejam'), (r'hackathon', 'hackathon'),
+                              (r'contest|competition|olympiad|championship', 'contest'),
+                              (r'conference|symposium', 'conference'),
+                              (r'fest|carnival', 'fest'),
+                              (r'workshop|bootcamp|masterclass|training|meetup|dev days|devin day', 'workshop')]:
+        if re.search(pattern, text, re.IGNORECASE):
+            return category, None
+    return None, None  # Relevant lead, precise category requires human review.
+
+
+def parse_eventify(text, source, source_url, observed_at):
+    """Read the anonymous JSON listing used by EventifyBD's public calendar.
+
+    No scraping of private submissions, no mock data, pagination guesses or
+    provided organizer-link fetches. This is an aggregator, not verification.
+    """
+    document = json.loads(text)
+    if not isinstance(document, dict) or not isinstance(document.get('events'), list):
+        raise ValueError('EventifyBD listing must contain an events array')
+    listing_url = allowed_url(source['listingUrl'], source['allowedHosts'])
+    bangladesh_zone = timezone(timedelta(hours=6))
+    today = datetime.fromisoformat(observed_at.replace('Z', '+00:00')).astimezone(bangladesh_zone).date()
+    counts = {'total': len(document['events']), 'business': 0, 'unrelated': 0, 'past': 0, 'invalid': 0, 'retained': 0}
+    found = []
+    warnings = []
+    for item in document['events']:
+        if not isinstance(item, dict):
+            counts['invalid'] += 1
+            continue
+        category, exclusion = eventify_category(item)
+        if exclusion:
+            counts[exclusion] += 1
+            continue
+        last_known_date = event_date(item.get('event_end_date')) or event_date(item.get('event_start_date'))
+        if last_known_date:
+            last_day = date.fromisoformat(last_known_date) if len(last_known_date) == 10 else datetime.fromisoformat(last_known_date.replace('Z', '+00:00')).astimezone(bangladesh_zone).date()
+            if last_day < today:
+                counts['past'] += 1
+                continue
+        source_id = clean(item.get('id'), 100)
+        detail_url = urljoin(listing_url, 'event.html?' + urlencode({'id': source_id})) if source_id else listing_url
+        provided_url = None
+        if item.get('event_link'):
+            try:
+                provided_url = public_https_url(item['event_link'])
+            except (ValueError, TypeError):
+                warnings.append('Unsafe/non-HTTPS provided event link omitted; EventifyBD listing retained for review.')
+        candidate = make_candidate({
+            'title': item.get('event_title'), 'url': provided_url or detail_url,
+            'category': category, 'organizer': item.get('event_organizer'),
+            'start': item.get('event_start_date'), 'end': item.get('event_end_date'),
+            'deadline': item.get('registration_deadline'),
+            'description': item.get('event_description') or item.get('description'),
+            'notes': [
+                'EventifyBD aggregator lead; provided links and reported dates are not organizer-verified.',
+                'Public frontend endpoint, not a documented supported API; may change without notice.',
+                'Reported date-only deadlines have no verified cutoff time or timezone.',
+            ],
+        }, source, source_url, observed_at)
+        if candidate is None:
+            counts['invalid'] += 1
+            continue
+        candidate.update({'sourceKind': 'aggregator', 'sourceListingUrl': detail_url,
+                          'sourceEventId': source_id or None,
+                          'sourceCategory': clean(item.get('event_type'), 100) or None,
+                          'providedEventUrl': provided_url,
+                          'location': clean(item.get('event_location'), 500) or None})
+        found.append(candidate)
+        counts['retained'] += 1
+    warnings.insert(0, 'EventifyBD entry counts (before deduplication/limit): ' + json.dumps(counts, sort_keys=True))
+    warnings.append('Single public listing response only. Entries before the observed Bangladesh calendar day are excluded using supplied end date, or start when end is absent. Missing-date leads remain partial. Coverage and organizer accuracy require review.')
+    return found, [], warnings
+
+
 def collect(config, fetcher=fetch, observed_at=None):
     observed_at = observed_at or datetime.now(timezone.utc).isoformat(timespec='seconds')
     candidates, reports = {}, []
@@ -290,7 +393,7 @@ def collect(config, fetcher=fetch, observed_at=None):
                 if len(text.encode('utf-8')) > MAX_BYTES:
                     raise ValueError('Response exceeds 1 MiB limit')
                 report['fetchedPages'] += 1
-                parser = parse_feed if source.get('format') in ('rss', 'atom') and url == source['url'] else parse_html
+                parser = parse_eventify if source.get('adapter') == 'eventifybd' else parse_feed if source.get('format') in ('rss', 'atom') and url == source['url'] else parse_html
                 items, links, warnings = parser(text, {**source, '_linkTitle': link_title}, final_url, observed_at)
                 report['warnings'].extend(warnings)
                 for item in items:

@@ -1,5 +1,12 @@
 [
   {
+    "id": "eventifybd",
+    "name": "EventifyBD",
+    "url": "https://eventifybd.com/",
+    "scope": "local",
+    "description": "Community event calendar for Bangladesh hackathons, CTFs, programming contests, datathons and university tech fests. Used to discover leads; confirm dates and eligibility with the event organizer before publication or registration."
+  },
+  {
     "id": "nasa-space-apps",
     "name": "NASA Space Apps Challenge",
     "url": "https://www.spaceappschallenge.org/",
@@ -44,7 +51,7 @@
   {
     "id": "buet-cse-news",
     "name": "BUET CSE News",
-    "url": "https://cse.buet.ac.bd/web/home/all_news",
+    "url": "https://cse.buet.ac.bd/home/all_news",
     "scope": "local",
     "description": "Official department announcements for CSE fests, programming contests and research events. Existing 2026 fest coverage describes a completed event."
   },

@@ -93,6 +93,7 @@ class CDP:
 
 async def exercise(endpoint, base_url):
     catalog = json.loads((ROOT / 'data/events.json').read_text(encoding='utf-8'))
+    source_count = len(json.loads((ROOT / 'data/sources.json').read_text(encoding='utf-8')))
     clock = datetime(2026, 10, 14, 6, tzinfo=timezone.utc)
     active_events = [e for e in catalog['events'] if e['status'] != 'cancelled' and (not e['end'] or datetime.fromisoformat(e['end']) > clock)]
     local_count = sum(e['scope'] == 'local' for e in active_events)
@@ -163,7 +164,7 @@ async def exercise(endpoint, base_url):
         await cdp.evaluate("f.elements.namedItem('end').value='2030-01-21T09:00'; f.elements.namedItem('url').value='http://example.org'; f.requestSubmit()")
         await cdp.wait("document.querySelector('#form-error').textContent.includes('HTTPS')")
         await cdp.evaluate("document.querySelector('[data-close=\"add-dialog\"]').click(); document.querySelector('[data-route=sources]').click()")
-        assert await cdp.evaluate("document.querySelectorAll('.source-card').length") == 9
+        assert await cdp.evaluate("document.querySelectorAll('.source-card').length") == source_count
         # All-day dates do not shift when the display zone changes west of UTC.
         await cdp.evaluate("var s=JSON.parse(localStorage.getItem('cse-radar-preview')); s.radarTimezone='America/New_York'; localStorage.setItem('cse-radar-preview', JSON.stringify(s))")
         await cdp.call('Page.reload')

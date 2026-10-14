@@ -8,7 +8,7 @@ CSE Radar is a browser extension for discovering CSE opportunities in Bangladesh
 
 Version 0.2 includes a **reviewed event catalog with optional updates**. Enable **Preferences → Enable event updates** to download new catalog editions from this repository without reinstalling. The extension checks every six hours while the browser runs; **Refresh events** checks immediately. Updates are off by default. The bundled catalog and last valid download remain available offline.
 
-The discovery workflow collects public event leads from MLH, itch.io, and BUET CSE announcements. Leads require review before appearing in the extension. This does not provide exhaustive or automatically verified coverage. Check each event's official source before registering or travelling; dates, eligibility, fees, and availability can change after the event's own verification date. A recent download does not mean that every event was recently verified. Events with unannounced dates are leads, not confirmed calendar appointments.
+The discovery workflow collects public event leads from MLH, itch.io, BUET CSE announcements, and EventifyBD. Leads require review before appearing in the extension. This does not provide exhaustive or automatically verified coverage. Check each event's official source before registering or travelling; dates, eligibility, fees, and availability can change after the event's own verification date. A recent download does not mean that every event was recently verified. Events with unannounced dates are leads, not confirmed calendar appointments.
 
 Saved events, custom events, and preferences stay in the browser's local extension storage. There is no account or cloud synchronization of personal data. Reviewed date changes and cancellations update matching saved events and their reminders; personal events are preserved. Removed listings remain saved until you remove them. Calendar exports create `.ics` files containing event dates, known registration deadlines, and official hyperlinks. Previously exported files or imported calendar entries do not update automatically; export again after a schedule change.
 
@@ -111,6 +111,19 @@ python tests/catalog_smoke.py
 To preview the interface without installing the extension, run `python -m http.server 8000 --bind 127.0.0.1` in the project directory and open `http://127.0.0.1:8000/dashboard.html`. This preview uses separate local browser storage and cannot deliver extension reminders. Opening the HTML directly as a file will not reliably load its JSON catalog.
 
 ## Event collection and review
+
+The data flow is: **public source listings → daily collection of unreviewed leads → maintainer verification → reviewed `data/events.json` on GitHub → optional extension refresh every six hours**. The browser downloads the reviewed catalog; it does not directly scrape the source websites. Discovery and publication are separate, so the collection schedule does not guarantee that a new event is immediately published.
+
+| Source | Collection purpose |
+| --- | --- |
+| [MLH season listing](https://mlh.io/seasons/2027/events) | International hackathon leads from public structured event data. |
+| [itch.io upcoming jams](https://itch.io/jams/upcoming) | Game jam leads from a bounded set of public jam pages. |
+| [BUET CSE announcements](https://cse.buet.ac.bd/home/all_news) | Bangladesh university tech event leads; announcement dates are not treated as event dates. |
+| [EventifyBD](https://eventifybd.com/) | Bangladesh technology event leads; aggregator details require organizer verification. |
+
+The EventifyBD adapter reads the anonymous `https://api.eventifybd.com/events` response used by its public calendar. This is a public frontend endpoint, not a documented supported API, and may change. Business-case competitions, unrelated activities, and clearly past listings are excluded. Reported dates and deadlines retain their precision and remain unverified until organizer review; provided external links are not automatically treated as official. Collection notes preserve EventifyBD listing attribution.
+
+Reviewed entries also cite organizers directly, including NASA Space Apps, MLH Global Hack Week, IUBAT/ICPC, hackCBS, Junction, and HackTheBurgh. These organizer links are provenance for reviewed entries; they are not all automatic collection adapters. The extension's source directory lists both kinds of source.
 
 Run `python scripts/collect_events.py` to write `artifacts/candidates.json` and `artifacts/collection-report.json`. The collector uses public structured data and a bounded number of source links. It follows redirects only to allowlisted hosts, limits response sizes, records partial failures, and preserves date-only values without guessing timezones or registration cutoffs. It does not scrape private groups or images. Some sources may reject automated requests.
 

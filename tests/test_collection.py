@@ -14,6 +14,9 @@ OBSERVED = '2026-10-14T12:00:00+00:00'
 SOURCE = {'id': 'test', 'url': 'https://events.example.org/list',
           'allowedHosts': ['events.example.org'], 'linkPattern': '^/events/[^/]+$',
           'maxLinkedPages': 2}
+EVENTIFY_SOURCE = {'id': 'eventifybd', 'url': 'https://api.eventifybd.com/events',
+                  'listingUrl': 'https://eventifybd.com/', 'adapter': 'eventifybd',
+                  'allowedHosts': ['api.eventifybd.com', 'eventifybd.com']}
 
 
 class CollectionTests(unittest.TestCase):
@@ -144,6 +147,82 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(calls, [SOURCE['url'], 'https://events.example.org/events/2'])
         self.assertEqual(report['sources'][0]['status'], 'partial')
         self.assertIn('stopped', report['sources'][0]['warnings'][0])
+
+    def test_eventify_category_mapping_excludes_business_and_general_activities(self):
+        for source_type, expected in [('Hackathon', 'hackathon'), ('CTF', 'contest'),
+                                      ('Datathon', 'contest'), ('CP', 'contest')]:
+            self.assertEqual(collector.eventify_category({'event_type': source_type})[0], expected)
+        for item in [{'event_type': 'Business Case', 'event_title': 'AI business case'},
+                     {'event_type': 'Fest', 'event_title': 'Youth Climate Summit'},
+                     {'event_type': 'Others', 'event_title': 'Chess Competition - CSE Carnival'},
+                     {'event_type': 'Others', 'event_title': 'Music festival', 'tags': ['AI']}]:
+            self.assertIsNotNone(collector.eventify_category(item)[1])
+        self.assertEqual(collector.eventify_category({'event_type': 'Others', 'event_title': 'Python Workshop', 'description': 'Learn software programming'})[0], 'workshop')
+        self.assertEqual(collector.eventify_category({'event_type': 'Fest', 'event_title': 'Techtron 2.0'})[0], 'fest')
+        self.assertEqual(collector.eventify_category({'event_type': 'Fest', 'event_title': 'CSE Fest', 'description': 'Hackathon, esports, and poster design'})[0], 'fest')
+        self.assertEqual(collector.eventify_category({'event_type': 'Others', 'event_title': 'Sports Day', 'description': 'Esports championship'})[1], 'unrelated')
+
+    def test_eventify_date_only_deadline_and_source_provenance_preserved(self):
+        row = {'id': 'abc123', 'event_type': 'Hackathon', 'event_title': 'New Hackathon',
+               'event_start_date': '2026-11-01', 'event_end_date': '2026-11-02',
+               'registration_deadline': '2026-10-31', 'event_link': 'https://organizer.example.org/apply',
+               'created_at': '2026-01-01', 'event_organizer': 'University Club'}
+        found, _, _ = collector.parse_eventify(json.dumps({'events': [row]}), EVENTIFY_SOURCE, EVENTIFY_SOURCE['url'], OBSERVED)
+        event = found[0]
+        self.assertEqual(event['start'], '2026-11-01')
+        self.assertEqual(event['end'], '2026-11-02')
+        self.assertEqual(event['deadline'], '2026-10-31')
+        self.assertEqual(event['sourceUrl'], 'https://api.eventifybd.com/events')
+        self.assertEqual(event['sourceListingUrl'], 'https://eventifybd.com/event.html?id=abc123')
+        self.assertEqual(event['providedEventUrl'], event['url'])
+        self.assertEqual(event['sourceKind'], 'aggregator')
+        self.assertEqual(event['reviewStatus'], 'unreviewed')
+        self.assertIn('not organizer-verified', event['notes'][2])
+
+    def test_eventify_unsafe_links_use_listing_without_guessing_missing_fields(self):
+        rows = [{'id': str(index), 'event_type': 'CP', 'event_title': 'Programming Contest',
+                 'event_link': url, 'registration_deadline': '2026-11-01T09:00:00'}
+                for index, url in enumerate(['javascript:alert(1)', 'http://unsafe.example.org/',
+                                             'https://user:password@organizer.example.org/', 'https://127.0.0.1/'])]
+        found, _, warnings = collector.parse_eventify(json.dumps({'events': rows}), EVENTIFY_SOURCE, EVENTIFY_SOURCE['url'], OBSERVED)
+        self.assertEqual(len(found), 4)
+        for event in found:
+            self.assertIsNone(event['providedEventUrl'])
+            self.assertEqual(event['url'], event['sourceListingUrl'])
+            self.assertIsNone(event['deadline'])
+            self.assertIsNone(event['start'])
+            self.assertIsNone(event['end'])
+        self.assertTrue(any('Unsafe' in warning for warning in warnings))
+
+    def test_eventify_filters_past_using_bangladesh_calendar_and_retains_partial(self):
+        # UTC Oct14 20:00 is Oct15 in Bangladesh; keep events ending Oct15.
+        rows = [{'event_type': 'Hackathon', 'event_title': title,
+                 'event_start_date': start, 'event_end_date': end}
+                for title, start, end in [('past', '2026-10-13', '2026-10-14'),
+                                         ('ongoing', '2026-10-13', '2026-10-15'),
+                                         ('upcoming', '2026-10-16', None),
+                                         ('past-single-date', '2026-10-14', None),
+                                         ('partial', None, None)]]
+        found, _, warnings = collector.parse_eventify(json.dumps({'events': rows}), EVENTIFY_SOURCE, EVENTIFY_SOURCE['url'], '2026-10-14T20:00:00Z')
+        self.assertEqual([row['title'] for row in found], ['ongoing', 'upcoming', 'partial'])
+        self.assertIn('"past": 2', warnings[0])
+
+    def test_eventify_collection_deduplicates_without_following_provided_urls(self):
+        calls = []
+        row = {'event_type': 'Hackathon', 'event_title': 'Same event', 'event_start_date': '2026-11-01',
+               'event_link': 'https://organizer.example.org/event'}
+        def fetch(url, hosts):
+            calls.append(url)
+            return json.dumps({'events': [row, row]}), url
+        result, report = collector.collect({'sources': [EVENTIFY_SOURCE]}, fetch, OBSERVED)
+        self.assertEqual(calls, ['https://api.eventifybd.com/events'])
+        self.assertEqual(len(result['candidates']), 1)
+        self.assertEqual(report['sources'][0]['candidateCount'], 1)
+
+    def test_eventify_malformed_payload_is_reported(self):
+        result, report = collector.collect({'sources': [EVENTIFY_SOURCE]}, lambda url, hosts: ('{"events": null}', url), OBSERVED)
+        self.assertEqual(result['candidates'], [])
+        self.assertIn('events array', report['sources'][0]['errors'][0]['error'])
 
 
 if __name__ == '__main__':
