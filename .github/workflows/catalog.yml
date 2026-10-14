@@ -1,0 +1,55 @@
+name: Catalog checks and discovery
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * *'
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: python -m unittest discover -s tests -p test_collection.py
+      - run: node --test tests/core.test.js tests/feed.test.js tests/catalog_data.test.js
+
+  collect:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+      - name: Collect unreviewed public event leads
+        run: python scripts/collect_events.py
+      - name: Upload leads and per-source collection report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: unreviewed-event-candidates-${{ github.run_id }}
+          path: |
+            artifacts/candidates.json
+            artifacts/collection-report.json
+          retention-days: 14
+          if-no-files-found: warn

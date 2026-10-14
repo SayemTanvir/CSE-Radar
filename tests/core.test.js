@@ -103,9 +103,10 @@ async function main() {
     },
     notifications: { async create(id, data) { notices.push({ id, data }); }, async clear() {}, onClicked: listen('click') },
     tabs: { async create(options) { tabs.push(options); } }, action: { onClicked: listen('action') },
-    runtime: { getURL(value) { return 'chrome-extension://test/' + value; }, onInstalled: listen('install'), onStartup: listen('startup') }
+    permissions: { async contains() { return false; }, onRemoved: listen('permissionsRemoved') },
+    runtime: { getURL(value) { return 'chrome-extension://test/' + value; }, onInstalled: listen('install'), onStartup: listen('startup'), onMessage: listen('message') }
   };
-  const sandbox = vm.createContext({ chrome: api, RadarCore: core, Date: FixedDate, Intl, console });
+  const sandbox = vm.createContext({ chrome: api, RadarCore: core, RadarFeed: require('../feed.js'), Date: FixedDate, Intl, console });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../background.js'), 'utf8'), sandbox);
   await sandbox.reconcile();
   assert.equal(alarms.has('radar:reminder:obsolete'), false);

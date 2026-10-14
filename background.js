@@ -1,9 +1,11 @@
 'use strict';
-if (typeof importScripts === 'function') importScripts('core.js');
+if (typeof importScripts === 'function') importScripts('core.js', 'feed.js');
 const extensionAPI = typeof browser !== 'undefined' ? browser : chrome;
 const DAILY_ALARM = 'radar:reconcile';
+const FEED_ALARM = 'radar:feed';
 const REMINDER_PREFIX = 'radar:reminder:';
 let workQueue = Promise.resolve();
+let bundledCatalogPromise;
 function serial(task) {
   workQueue = workQueue.then(task).catch(error => console.error('CSE Radar:', error));
   return workQueue;
@@ -48,13 +50,79 @@ async function deliver(alarm) {
   await extensionAPI.storage.local.set({ radarDelivered: delivered });
 }
 extensionAPI.action.onClicked.addListener(() => extensionAPI.tabs.create({ url: extensionAPI.runtime.getURL('dashboard.html') }));
-extensionAPI.runtime.onInstalled.addListener(() => serial(reconcile));
-extensionAPI.runtime.onStartup.addListener(() => serial(reconcile));
+function bundledCatalog() {
+  if (!bundledCatalogPromise) bundledCatalogPromise = (async () => {
+    if (typeof fetch !== 'function') return null;
+    try {
+      const response = await fetch(extensionAPI.runtime.getURL('data/events.json'));
+      if (!response.ok) return null;
+      return RadarFeed.validateCatalog(await response.json());
+    } catch (_) { return null; }
+  })();
+  return bundledCatalogPromise;
+}
+async function effectiveCatalog() {
+  const bundle = await bundledCatalog();
+  const { radarCatalog } = await extensionAPI.storage.local.get('radarCatalog');
+  let cached;
+  try { cached = RadarFeed.validateCatalog(radarCatalog); } catch (_) { cached = null; }
+  return cached && (!bundle || cached.updatedAt >= bundle.updatedAt) ? cached : bundle;
+}
+async function syncSaved() {
+  const catalog = await effectiveCatalog();
+  const { radarSaved } = await extensionAPI.storage.local.get('radarSaved');
+  const saved = RadarFeed.reconcileSaved(radarSaved, catalog);
+  if (JSON.stringify(saved) !== JSON.stringify(radarSaved || [])) await extensionAPI.storage.local.set({ radarSaved: saved });
+  await reconcile();
+  return { ok: true, saved };
+}
+async function mutateSaved(message) {
+  const catalog = await effectiveCatalog();
+  const { radarSaved } = await extensionAPI.storage.local.get('radarSaved');
+  let saved = RadarFeed.reconcileSaved(radarSaved, catalog);
+  if (message.type === 'radar:save') {
+    let event = RadarCore.validateEvent(message.event);
+    if (!event.id.startsWith('custom-') && catalog) event = catalog.events.find(item => item.id === event.id) || event;
+    saved = saved.filter(item => item.id !== event.id).concat(event);
+  } else {
+    if (typeof message.id !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/.test(message.id)) throw new Error('Invalid event id.');
+    saved = saved.filter(item => item.id !== message.id);
+  }
+  await extensionAPI.storage.local.set({ radarSaved: saved });
+  await reconcile();
+  return { ok: true, saved };
+}
+async function feedSchedule() {
+  if (await RadarFeed.allowed(extensionAPI)) await extensionAPI.alarms.create(FEED_ALARM, { periodInMinutes: 360 });
+  else await extensionAPI.alarms.clear(FEED_ALARM);
+}
+async function refreshCatalog() {
+  await feedSchedule();
+  const result = await RadarFeed.refresh(extensionAPI, { minimumCatalog: await bundledCatalog() });
+  // Call directly inside this queue: enqueueing and awaiting reconcile would deadlock.
+  await syncSaved();
+  return result;
+}
+extensionAPI.runtime.onInstalled.addListener(() => serial(refreshCatalog));
+extensionAPI.runtime.onStartup.addListener(() => serial(refreshCatalog));
+extensionAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || !['radar:refresh', 'radar:save', 'radar:remove', 'radar:sync-saved'].includes(message.type) || !sender || sender.id !== extensionAPI.runtime.id) return false;
+  serial(async () => {
+    try { sendResponse(await (message.type === 'radar:refresh' ? refreshCatalog() : message.type === 'radar:sync-saved' ? syncSaved() : mutateSaved(message))); }
+    catch (_) { sendResponse({ ok: false, status: { error: 'Could not update CSE Radar. Try again.' } }); }
+  });
+  return true;
+});
 extensionAPI.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && (changes.radarSaved || changes.radarReminderHours)) serial(reconcile);
+  if (area === 'local' && changes.radarFeedEnabled) serial(feedSchedule);
 });
+if (extensionAPI.permissions && extensionAPI.permissions.onRemoved) extensionAPI.permissions.onRemoved.addListener(() => serial(async () => {
+  if (!await extensionAPI.permissions.contains({ origins: [RadarFeed.FEED_ORIGIN] })) await extensionAPI.storage.local.set({ radarFeedEnabled: false });
+  await feedSchedule();
+}));
 extensionAPI.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === DAILY_ALARM) serial(reconcile);
+  if (alarm.name === DAILY_ALARM || alarm.name === FEED_ALARM) serial(refreshCatalog);
   else if (alarm.name.startsWith(REMINDER_PREFIX)) serial(() => deliver(alarm));
 });
 extensionAPI.notifications.onClicked.addListener(id => serial(async () => {

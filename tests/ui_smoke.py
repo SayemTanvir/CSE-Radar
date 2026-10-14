@@ -5,6 +5,7 @@ Run: python tests/ui_smoke.py
 """
 import asyncio
 import base64
+from datetime import datetime, timezone
 import functools
 import http.server
 import json
@@ -22,6 +23,22 @@ import websockets
 ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS = ROOT / 'artifacts'
 CHROME = Path(os.environ.get('RADAR_TEST_BROWSER', r'C:\Program Files\Google\Chrome\Application\chrome.exe'))
+
+
+def wait_debug_port(profile, browser):
+    """Chrome creates the port file before releasing its Windows write lock."""
+    port_file = Path(profile) / 'DevToolsActivePort'
+    for _ in range(200):
+        try:
+            lines = port_file.read_text().splitlines()
+            if lines and lines[0].isdigit():
+                return lines[0]
+        except (FileNotFoundError, PermissionError):
+            pass
+        if browser.poll() is not None:
+            raise RuntimeError('Isolated browser exited before opening its debugging port.')
+        time.sleep(.05)
+    raise RuntimeError('Isolated browser did not open its debugging port within 10 seconds.')
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -75,6 +92,11 @@ class CDP:
 
 
 async def exercise(endpoint, base_url):
+    catalog = json.loads((ROOT / 'data/events.json').read_text(encoding='utf-8'))
+    clock = datetime(2026, 10, 14, 6, tzinfo=timezone.utc)
+    active_events = [e for e in catalog['events'] if e['status'] != 'cancelled' and (not e['end'] or datetime.fromisoformat(e['end']) > clock)]
+    local_count = sum(e['scope'] == 'local' for e in active_events)
+    confirmed_count = sum(bool(e['start']) for e in active_events)
     async with websockets.connect(endpoint, max_size=20 * 1024 * 1024) as socket:
         cdp = CDP(socket)
         await cdp.call('Page.enable')
@@ -88,9 +110,10 @@ async def exercise(endpoint, base_url):
             };
         """})
         await cdp.call('Page.navigate', {'url': base_url + '/dashboard.html'})
-        await cdp.wait("document.querySelectorAll('.event-card').length === 8")
-        assert await cdp.evaluate("document.querySelector('#stat-upcoming').textContent") == '7'
-        assert await cdp.evaluate("document.querySelector('#catalog-status').textContent.includes('not a live feed')")
+        await cdp.wait(f"document.querySelectorAll('.event-card').length === {len(active_events)}")
+        assert await cdp.evaluate("document.querySelector('#stat-upcoming').textContent") == str(confirmed_count)
+        assert await cdp.evaluate("document.querySelector('#catalog-status').textContent.includes('reviewed events')")
+        assert await cdp.evaluate("document.querySelector('#feed-refresh').disabled")
         await cdp.screenshot('dashboard-desktop.png')
         await cdp.evaluate("document.querySelector('#search').value='NASA'; document.querySelector('#search').dispatchEvent(new Event('input'))")
         assert await cdp.evaluate("document.querySelectorAll('.event-card').length") == 1
@@ -107,8 +130,8 @@ async def exercise(endpoint, base_url):
         await cdp.evaluate("[...document.querySelectorAll('.calendar-day')].find(b => b.getAttribute('aria-label').startsWith('Saturday, 14 Nov')).click()")
         assert await cdp.evaluate("document.querySelector('#day-events').textContent.includes('NASA Space Apps')")
         await cdp.evaluate("document.querySelector('[data-route=discover]').click(); document.querySelector('#scope-filter').value='local'; document.querySelector('#scope-filter').dispatchEvent(new Event('change'))")
-        assert await cdp.evaluate("document.querySelectorAll('.event-card').length") == 1
-        assert await cdp.evaluate("document.querySelector('.event-card').textContent.includes('Dates awaiting confirmation')")
+        assert await cdp.evaluate("document.querySelectorAll('.event-card').length") == local_count
+        assert await cdp.evaluate("document.querySelector('#event-list').textContent.includes('Dates awaiting confirmation')")
         await cdp.evaluate("document.querySelector('#clear-filters').click(); document.querySelector('#add-open').click()")
         await cdp.evaluate("""
             var form = document.querySelector('#add-form');
@@ -118,7 +141,7 @@ async def exercise(endpoint, base_url):
         """)
         await cdp.wait("!document.querySelector('#add-dialog').open")
         assert await cdp.evaluate("document.querySelector('#saved-count').textContent") == '2'
-        assert await cdp.evaluate("document.querySelectorAll('script').length") == 2
+        assert await cdp.evaluate("document.querySelectorAll('script').length") == 3
         await cdp.evaluate("document.querySelector('#settings-open').click(); document.querySelector('#reminder-select').value='0'; document.querySelector('#timezone-select').value='UTC'; document.querySelector('#settings-form').requestSubmit()")
         await cdp.wait("!document.querySelector('#settings-dialog').open")
         assert await cdp.evaluate("JSON.parse(localStorage.getItem('cse-radar-preview')).radarReminderHours") == 0
@@ -171,12 +194,7 @@ def main():
     try:
         browser = subprocess.Popen([str(CHROME), '--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0', f'--user-data-dir={profile}', 'about:blank'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
-            port_file = Path(profile) / 'DevToolsActivePort'
-            for _ in range(200):
-                if port_file.exists():
-                    break
-                time.sleep(.05)
-            port = port_file.read_text().splitlines()[0]
+            port = wait_debug_port(profile, browser)
             with urlopen(f'http://127.0.0.1:{port}/json/list') as response:
                 targets = json.load(response)
             endpoint = next(target['webSocketDebuggerUrl'] for target in targets if target['type'] == 'page')

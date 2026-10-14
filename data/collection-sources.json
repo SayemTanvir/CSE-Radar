@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "description": "Public discovery sources. Output is unreviewed leads, never a published event feed. Exact hosts also restrict every redirect and linked-page fetch.",
+  "sources": [
+    {
+      "id": "mlh-2027",
+      "url": "https://mlh.io/seasons/2027/events",
+      "allowedHosts": ["mlh.io", "www.mlh.com"],
+      "adapter": "mlh",
+      "category": "hackathon",
+      "maxLinkedPages": 0,
+      "maxCandidates": 100,
+      "notes": "Official season listing; reads public embedded upcomingEvents JSON. Season URL needs annual maintenance. Organizer sites are linked but not fetched."
+    },
+    {
+      "id": "itch-upcoming",
+      "url": "https://itch.io/jams/upcoming",
+      "allowedHosts": ["itch.io"],
+      "adapter": "itch",
+      "category": "gamejam",
+      "linkPattern": "^/jam/[^/]+/?$",
+      "maxLinkedPages": 8,
+      "maxCandidates": 20,
+      "notes": "Official platform listing; follows only the first eight distinct jam links. Platform dates may include voting. Community listings require relevance and content review. No pagination or exhaustive coverage promised."
+    },
+    {
+      "id": "buet-cse-news",
+      "url": "https://cse.buet.ac.bd/home/all_news",
+      "allowedHosts": ["cse.buet.ac.bd"],
+      "adapter": "university",
+      "country": "Bangladesh",
+      "linkPattern": "^/home/news_detail/[0-9]+/?$",
+      "linkTitlePattern": "(?i)fest|hackathon|game.?jam|contest|conference|workshop|seminar|competition|programming",
+      "maxLinkedPages": 4,
+      "maxCandidates": 8,
+      "notes": "Official department announcements; event dates are not inferred from news publication dates. Includes partial leads and past/non-event news requiring manual triage."
+    }
+  ]
+}

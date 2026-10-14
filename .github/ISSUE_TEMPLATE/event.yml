@@ -1,0 +1,66 @@
+name: Suggest a CSE event
+description: Share a hackathon, game jam, contest, university fest, or other technology opportunity for review.
+title: "[Event] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please use public organizer sources. A submission is a lead, not a confirmed calendar entry. Do not include passwords, private group content, student IDs, phone numbers, or other personal details. Maintainers review dates and eligibility before adding an event to the catalog.
+  - type: input
+    id: event-name
+    attributes:
+      label: Event name
+    validations:
+      required: true
+  - type: input
+    id: organizer
+    attributes:
+      label: Organizer
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Official event announcement URL
+      placeholder: https://...
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Hackathon
+        - Game jam
+        - Programming contest
+        - University tech fest
+        - Workshop
+        - Conference
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Location and format
+      description: Include country/city and whether online, in person, or hybrid.
+    validations:
+      required: true
+  - type: textarea
+    id: dates
+    attributes:
+      label: Event dates and registration deadline
+      description: Copy published dates and timezone, with links. Say unknown for anything not announced. Distinguish a registration deadline from a project submission deadline.
+    validations:
+      required: true
+  - type: textarea
+    id: eligibility
+    attributes:
+      label: Eligibility and cost
+      description: Include student/age/team restrictions, fees, and source links if published. Say unknown if not specified.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Other useful details
+      description: Optional registration URL, rules, prizes, or conflicting announcements to check.

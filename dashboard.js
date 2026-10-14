@@ -7,7 +7,7 @@
   const categoryNames = { hackathon: 'Hackathon', gamejam: 'Game jam', contest: 'Contest', fest: 'Tech fest', workshop: 'Workshop', conference: 'Conference' };
   const modeNames = { online: 'Online', 'in-person': 'In person', hybrid: 'Hybrid' };
   const routeNames = { discover: 'Discover', saved: 'My calendar', deadlines: 'Deadlines', sources: 'Event sources' };
-  const state = { events: [], sources: [], saved: [], zone: 'Asia/Dhaka', reminderHours: 24, route: 'discover', category: 'all', scope: 'all', mode: 'all', query: '', view: 'list', month: '', day: null, detailId: null, updatedAt: null, loadError: false };
+  const state = { events: [], sources: [], saved: [], zone: 'Asia/Dhaka', reminderHours: 24, route: 'discover', category: 'all', scope: 'all', mode: 'all', query: '', view: 'list', month: '', day: null, detailId: null, updatedAt: null, loadError: false, feedEnabled: false, feedStatus: {}, feedBusy: false, catalogOrigin: 'bundled', cachedCatalog: null };
   let toastTimeout;
   let saving = false;
   let catalog;
@@ -40,7 +40,7 @@
     try { await handler(); } catch (error) { console.error(error); toast(error.message || 'Something went wrong. Please try again.'); }
   }
   async function readStorage() {
-    if (api) return api.storage.local.get(['radarSaved', 'radarTimezone', 'radarReminderHours']);
+    if (api) return api.storage.local.get(['radarSaved', 'radarTimezone', 'radarReminderHours', 'radarCatalog', 'radarFeedEnabled', 'radarFeedStatus']);
     return JSON.parse(localStorage.getItem('cse-radar-preview') || '{}');
   }
   async function writeStorage(values) {
@@ -48,6 +48,10 @@
     else localStorage.setItem('cse-radar-preview', JSON.stringify({ ...await readStorage(), ...values }));
   }
   function hydrate(stored) {
+    state.feedEnabled = stored.radarFeedEnabled === true;
+    state.feedStatus = stored.radarFeedStatus && typeof stored.radarFeedStatus === 'object' ? stored.radarFeedStatus : {};
+    try { state.cachedCatalog = stored.radarCatalog ? RadarFeed.validateCatalog(stored.radarCatalog) : null; } catch { state.cachedCatalog = null; }
+    selectCatalog();
     state.saved = (Array.isArray(stored.radarSaved) ? stored.radarSaved : []).flatMap(raw => {
       try { return [RadarCore.validateEvent(raw)]; } catch { return []; }
     });
@@ -162,7 +166,8 @@
     list.replaceChildren(...events.map(eventCard));
     $('#empty-state').hidden = events.length > 0;
     $('#empty-copy').textContent = state.route === 'saved' ? 'Save an event with the + button, or add one you found yourself.' : state.route === 'deadlines' ? 'No verified future registration cutoffs match. You can add a known deadline to your own event.' : state.loadError ? 'The bundled catalog could not load. Add an event yourself or try reopening CSE Radar.' : 'Try another filter or browse the official event sources.';
-    $('#catalog-status').textContent = `${preview ? 'Browser preview · notifications require installation. ' : ''}${state.updatedAt ? `Catalog checked ${state.updatedAt} · curated, not a live feed` : 'Catalog unavailable'}${custom ? ` · ${custom} personal ${custom === 1 ? 'event' : 'events'}` : ''}`;
+    $('#catalog-status').textContent = `${preview ? 'Browser preview · notifications require installation. ' : ''}${state.updatedAt ? `Catalog edition ${state.updatedAt} · ${state.catalogOrigin === 'cached' ? 'downloaded' : 'bundled'} · reviewed events` : 'Catalog unavailable'}${custom ? ` · ${custom} personal ${custom === 1 ? 'event' : 'events'}` : ''}`;
+    renderFeedStatus();
     $('#content-grid').classList.toggle('calendar-expanded', state.view === 'calendar');
     for (const view of ['list', 'calendar']) { const b = $(`#${view}-view`); b.classList.toggle('selected', state.view === view); b.setAttribute('aria-pressed', String(state.view === view)); }
     renderCalendar(events);
@@ -220,13 +225,24 @@
     saving = true;
     try {
       const remove = isSaved(event.id);
-      const next = remove ? state.saved.filter(e => e.id !== event.id) : [...state.saved, RadarCore.validateEvent(event)];
-      await writeStorage({ radarSaved: next });
-      state.saved = next;
+      await mutateSaved(remove ? 'remove' : 'save', event);
       render();
       if ($('#detail-dialog').open) renderDetail(event.id);
       toast(remove ? 'Removed from your calendar.' : preview ? 'Saved in this preview. Install the extension for reminders.' : state.reminderHours === 0 ? 'Saved to your calendar. Reminders are off.' : 'Saved to your calendar. Reminders scheduled for known future dates.');
     } finally { saving = false; }
+  }
+  async function mutateSaved(kind, event) {
+    if (api) {
+      const result = await api.runtime.sendMessage(kind === 'remove' ? { type: 'radar:remove', id: event.id } : { type: 'radar:save', event: RadarCore.validateEvent(event) });
+      if (!result?.ok || !Array.isArray(result.saved)) throw new Error(result?.status?.error || 'Could not save your changes. Please try again.');
+      state.saved = result.saved.map(item => RadarCore.validateEvent(item));
+    } else {
+      const stored = await readStorage();
+      const latest = Array.isArray(stored.radarSaved) ? stored.radarSaved.flatMap(raw => { try { return [RadarCore.validateEvent(raw)]; } catch { return []; } }) : [];
+      const next = latest.filter(item => item.id !== event.id);
+      if (kind === 'save') next.push(RadarCore.validateEvent(event));
+      await writeStorage({ radarSaved: next }); state.saved = next;
+    }
   }
   function renderDetail(id) {
     const event = getEvent(id);
@@ -302,8 +318,7 @@
     });
     if (Date.parse(event.end) <= Date.now()) throw new Error('Please add an event that has not ended yet.');
     if (event.deadline && Date.parse(event.deadline) > Date.parse(event.end)) throw new Error('The registration deadline cannot be after the event ends.');
-    const next = [...state.saved, event];
-    await writeStorage({ radarSaved: next }); state.saved = next;
+    await mutateSaved('save', event);
     form.reset(); $('#add-dialog').close(); resetFilters();
     state.month = dayKey(event.start).slice(0, 7); state.day = dayKey(event.start);
     location.hash = 'saved'; route('saved');
@@ -314,6 +329,58 @@
     $('#reminder-select').value = String(state.reminderHours);
     $('#settings-dialog').showModal();
   }
+  function selectCatalog() {
+    const cached = state.cachedCatalog;
+    const selected = cached && (!catalog || cached.updatedAt >= catalog.updatedAt) ? cached : catalog;
+    if (!selected) return;
+    state.events = selected.events;
+    state.updatedAt = selected.updatedAt;
+    state.catalogOrigin = selected === cached ? 'cached' : 'bundled';
+    state.loadError = false;
+  }
+  function renderFeedStatus() {
+    $('#feed-enable').disabled = preview || state.feedBusy;
+    $('#feed-enable').textContent = state.feedEnabled ? 'Turn off event updates' : 'Enable event updates';
+    $('#feed-refresh').disabled = preview || !state.feedEnabled || state.feedBusy;
+    $('#feed-refresh').textContent = state.feedBusy ? 'Refreshing…' : 'Refresh events';
+    let summary = state.feedEnabled ? 'Event updates are on.' : 'A catalog you can take offline.';
+    let message = preview ? 'Install the extension to enable catalog updates and browser reminders.' : state.feedEnabled ? 'Checks for reviewed catalog updates every six hours.' : 'Enable updates to receive reviewed event listings without reinstalling.';
+    if (state.feedStatus.lastSuccess && Number.isFinite(Date.parse(state.feedStatus.lastSuccess))) message += ` Last downloaded ${dateTimeLabel(state.feedStatus.lastSuccess)}.`;
+    if (state.feedStatus.error && typeof state.feedStatus.error === 'string') {
+      summary = 'Keeping your last available catalog.';
+      message = state.feedStatus.error.slice(0, 240) + ' Your saved events are safe. Retry when connected.';
+    }
+    if (state.feedBusy) { summary = 'Checking the radar…'; message = 'Downloading and checking the reviewed event catalog.'; }
+    if (state.updatedAt && (Date.now() - Date.parse(state.updatedAt + 'T00:00:00Z')) > 14 * 86400000) message += ' This catalog edition is over two weeks old; check organizer sources for changes.';
+    $('#feed-summary').textContent = summary;
+    $('#feed-status').textContent = message;
+    $('#feed-settings-status').textContent = state.feedEnabled ? 'Updates enabled. Event verification dates are shown in each event’s details.' : 'Updates off. No catalog requests are made.';
+  }
+  async function refreshFeed() {
+    if (!api || !state.feedEnabled || state.feedBusy) return;
+    state.feedBusy = true; renderFeedStatus();
+    try {
+      const result = await api.runtime.sendMessage({ type: 'radar:refresh' });
+      hydrate(await readStorage()); render();
+      if (!result?.ok) toast(result?.status?.error || 'Catalog could not refresh. Keeping your last available events.');
+      else toast('Catalog refreshed. Saved event schedules are up to date with this edition.');
+    } finally { state.feedBusy = false; renderFeedStatus(); }
+  }
+  async function toggleFeed() {
+    if (!api || state.feedBusy) return;
+    if (state.feedEnabled) {
+      await writeStorage({ radarFeedEnabled: false }); state.feedEnabled = false;
+      await api.permissions.remove({ origins: [RadarFeed.FEED_ORIGIN] });
+      hydrate(await readStorage()); render(); toast('Event updates turned off. Downloaded events remain available.');
+      return;
+    }
+    // Request immediately in the click handler, before any storage await, so
+    // Firefox and Chromium both see the required user gesture.
+    const granted = await api.permissions.request({ origins: [RadarFeed.FEED_ORIGIN] });
+    if (!granted) { toast('Permission was not granted. Your offline catalog still works.'); return; }
+    await writeStorage({ radarFeedEnabled: true }); state.feedEnabled = true;
+    await refreshFeed();
+  }
   async function init() {
     const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!['Asia/Dhaka', 'UTC'].includes(localZone)) $('#timezone-select').append(new Option(`Device (${localZone})`, localZone));
@@ -323,18 +390,20 @@
     state.month = todayKey().slice(0, 7); state.day = todayKey();
     const results = await Promise.allSettled([fetch('data/events.json').then(r => { if (!r.ok) throw new Error('Catalog unavailable'); return r.json(); }), fetch('data/sources.json').then(r => { if (!r.ok) throw new Error('Sources unavailable'); return r.json(); })]);
     if (results[0].status === 'fulfilled') {
-      catalog = results[0].value;
-      let invalidCount = 0;
-      state.events = (Array.isArray(catalog.events) ? catalog.events : []).flatMap(raw => { try { return [RadarCore.validateEvent(raw)]; } catch (error) { invalidCount++; console.error('Skipped invalid catalog entry:', error); return []; } });
-      state.events = [...new Map(state.events.map(e => [e.id, e])).values()];
-      state.updatedAt = RadarCore.validDate(catalog.updatedAt, true) ? catalog.updatedAt : null;
-      if (invalidCount) toast(`${invalidCount} invalid catalog ${invalidCount === 1 ? 'entry was' : 'entries were'} skipped.`);
+      try { catalog = RadarFeed.validateCatalog(results[0].value); selectCatalog(); }
+      catch (error) { state.loadError = !state.cachedCatalog; toast('The bundled catalog is invalid. Using downloaded or saved events if available.'); console.error(error); }
       // Refresh saved organizer entries so reminders use the current published schedule.
-      const refreshed = state.saved.map(saved => state.events.find(e => e.id === saved.id) || saved);
-      if (JSON.stringify(refreshed) !== JSON.stringify(state.saved)) {
-        try { await writeStorage({ radarSaved: refreshed }); state.saved = refreshed; } catch (error) { toast('Saved schedules could not be refreshed.'); console.error(error); }
+      const refreshed = state.updatedAt ? RadarFeed.reconcileSaved(state.saved, { updatedAt: state.updatedAt, events: state.events }) : state.saved;
+      if (state.saved.length) {
+        try {
+          if (api) {
+            const result = await api.runtime.sendMessage({ type: 'radar:sync-saved' });
+            if (!result?.ok || !Array.isArray(result.saved)) throw new Error('Saved schedules could not be refreshed.');
+            state.saved = result.saved.map(event => RadarCore.validateEvent(event));
+          } else if (JSON.stringify(refreshed) !== JSON.stringify(state.saved)) { await writeStorage({ radarSaved: refreshed }); state.saved = refreshed; }
+        } catch (error) { toast('Saved schedules could not be refreshed.'); console.error(error); }
       }
-    } else { state.loadError = true; toast('Could not load the event catalog. Your saved events remain available.'); }
+    } else { state.loadError = !state.cachedCatalog; toast('Could not load the bundled catalog. Downloaded and saved events remain available.'); }
     if (results[1].status === 'fulfilled') state.sources = (Array.isArray(results[1].value) ? results[1].value : []).filter(source => typeof source.name === 'string' && typeof source.description === 'string' && RadarCore.safeUrl(source.url));
     else $('#source-list').append(node('p', 'load-error', 'The source directory could not load. Please reopen CSE Radar.'));
     if (state.sources.length) renderSources();
@@ -358,6 +427,9 @@
     $('#export-saved').addEventListener('click', () => run(() => downloadCalendar(state.saved.map(e => getEvent(e.id) || e))));
     $('#add-open').addEventListener('click', () => { $('#form-error').textContent = ''; $('#add-dialog').showModal(); });
     $('#settings-open').addEventListener('click', openSettings);
+    $('#feed-manage').addEventListener('click', openSettings);
+    $('#feed-enable').addEventListener('click', () => run(toggleFeed));
+    $('#feed-refresh').addEventListener('click', () => run(refreshFeed));
     // Preferences remain reachable on narrow screens where the sidebar footer is hidden.
     $('#timezone-label').tabIndex = 0; $('#timezone-label').setAttribute('role', 'button'); $('#timezone-label').setAttribute('aria-label', 'Open timezone and reminder preferences');
     $('#timezone-label').addEventListener('click', openSettings);
@@ -377,7 +449,7 @@
       $('#settings-dialog').close(); render(); toast('Preferences saved.');
     }));
     if (api) api.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && (changes.radarSaved || changes.radarTimezone || changes.radarReminderHours)) run(async () => { hydrate(await readStorage()); render(); if ($('#detail-dialog').open) renderDetail(state.detailId); });
+      if (area === 'local' && (changes.radarSaved || changes.radarTimezone || changes.radarReminderHours || changes.radarCatalog || changes.radarFeedEnabled || changes.radarFeedStatus)) run(async () => { hydrate(await readStorage()); render(); if ($('#detail-dialog').open) renderDetail(state.detailId); });
     });
     else window.addEventListener('storage', event => { if (event.key === 'cse-radar-preview') run(async () => { hydrate(await readStorage()); render(); }); });
     setInterval(() => { if (!document.hidden) render(); }, 60000);

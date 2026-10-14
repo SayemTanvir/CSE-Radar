@@ -42,7 +42,7 @@ def icons():
 
 def package():
     icons()
-    files = ['core.js', 'background.js', 'manifest.json', 'dashboard.html', 'dashboard.js', 'style.css']
+    files = ['core.js', 'feed.js', 'background.js', 'manifest.json', 'dashboard.html', 'dashboard.js', 'style.css']
     missing = [name for name in files if not (ROOT / name).is_file()]
     if missing or not (ROOT / 'data/events.json').is_file():
         raise SystemExit('Source files missing: ' + ', '.join(missing or ['data/events.json']))
@@ -55,7 +55,7 @@ def package():
             shutil.copytree(ROOT / name, destination / name, dirs_exist_ok=True)
         if target == 'firefox':
             manifest = json.loads((destination / 'manifest.json').read_text(encoding='utf-8'))
-            manifest['background'] = {'scripts': ['core.js', 'background.js']}
+            manifest['background'] = {'scripts': ['core.js', 'feed.js', 'background.js']}
             manifest['browser_specific_settings'] = {'gecko': {'id': 'cse-radar@local.extension', 'strict_min_version': '140.0', 'data_collection_permissions': {'required': ['none']}}}
             (destination / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
         print(f'Built {destination}')
