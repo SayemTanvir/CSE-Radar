@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CSE Radar",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Discover tech events, save opportunities, and track registration deadlines in your calendar.",
   "permissions": ["storage", "alarms", "notifications"],
   "optional_host_permissions": ["https://raw.githubusercontent.com/*"],

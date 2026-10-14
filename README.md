@@ -45,6 +45,12 @@ Use Firefox 140 or later and the Firefox build rather than loading the Chromium 
 
 A Safari package is not shipped in this version. Safari needs a separate Apple-platform packaging and testing workflow; see [Apple's Safari extensions documentation](https://developer.apple.com/safari/extensions/). Mobile compatibility is not promised. The initial target is major desktop Chromium browsers and Firefox.
 
+Version 0.2.1 improves readability with 20px bold event titles, 14–16px event text, 16px form inputs, and larger touch controls. The phone layout has two-column navigation and statistics, a top Preferences button, horizontally scrollable category filters, stacked event details, and a compact header. Browser zoom remains available.
+
+The responsive interface is checked with touch emulation at 320, 360, 390, 430, 768, 1024, and 1440 CSS pixels, including dialog scrolling, calendar controls, saved events, and form access. These are desktop-browser emulation checks, not tests on physical phones. The standalone browser preview has no extension reminder service.
+
+Phone installation is a separate compatibility issue: [Chrome's mobile browser cannot install desktop extensions](https://support.google.com/chrome_webstore/answer/1698338?hl=en), and [Brave's mobile versions do not support these extensions](https://community.brave.com/t/does-brave-browser-for-android-support-extensions/541316). [Firefox for Android supports extensions](https://support.mozilla.org/en-US/kb/find-and-install-add-ons-firefox-android), but this project has not been packaged, distributed, or tested for Android. A hosted mobile web application would need a separate publishing and reminder strategy.
+
 ## Data and privacy
 
 - Official organizer URLs are shown with event details; the catalog's source notes explain the verification basis.
@@ -59,7 +65,7 @@ A Safari package is not shipped in this version. Safari needs a separate Apple-p
 
 | File | Purpose |
 | --- | --- |
-| `dashboard.html`, `dashboard.js`, `style.css` | Event discovery and calendar interface. |
+| `dashboard.html`, `dashboard.js`, `style.css`, `readability.css` | Event discovery, calendar interface, larger typography and touch layouts. |
 | `core.js` | Shared event validation, safe hyperlinks, calendar export, and reminder planning. |
 | `feed.js` | Permission-gated catalog downloads, validation, cache fallback, and saved-event reconciliation. |
 | `background.js` | Catalog refresh scheduling, serialized saved-event mutations, and browser reminders. |
@@ -89,6 +95,7 @@ Automated browser checks are also included. They use isolated headless browser p
 python tests/ui_smoke.py
 python tests/extension_smoke.py
 python tests/catalog_smoke.py
+python tests/responsive_smoke.py
 ```
 
 The UI check covers search, region filters, event links, saved-event persistence, custom form validation, all-day timezone behavior, preferences, combined calendar export, source listings, and narrow-screen layout. It saves preview images in `artifacts/`. The extension check loads `dist/chromium` into a recent Chrome via its experimental extension debugging API and verifies its actual service worker and reminder alarms. It does not display a system notification. Set `RADAR_TEST_BROWSER` if Chrome is installed elsewhere. The default test browser path is for Windows.
@@ -106,6 +113,7 @@ $env:RADAR_TEST_BROWSER = 'C:\Program Files\BraveSoftware\Brave-Browser\Applicat
 python tests/extension_smoke.py
 python tests/ui_smoke.py
 python tests/catalog_smoke.py
+python tests/responsive_smoke.py
 ```
 
 To preview the interface without installing the extension, run `python -m http.server 8000 --bind 127.0.0.1` in the project directory and open `http://127.0.0.1:8000/dashboard.html`. This preview uses separate local browser storage and cannot deliver extension reminders. Opening the HTML directly as a file will not reliably load its JSON catalog.
