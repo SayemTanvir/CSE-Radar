@@ -1,0 +1,386 @@
+'use strict';
+(() => {
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const api = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' && chrome.runtime?.id ? chrome : null);
+  const preview = !api;
+  const categoryNames = { hackathon: 'Hackathon', gamejam: 'Game jam', contest: 'Contest', fest: 'Tech fest', workshop: 'Workshop', conference: 'Conference' };
+  const modeNames = { online: 'Online', 'in-person': 'In person', hybrid: 'Hybrid' };
+  const routeNames = { discover: 'Discover', saved: 'My calendar', deadlines: 'Deadlines', sources: 'Event sources' };
+  const state = { events: [], sources: [], saved: [], zone: 'Asia/Dhaka', reminderHours: 24, route: 'discover', category: 'all', scope: 'all', mode: 'all', query: '', view: 'list', month: '', day: null, detailId: null, updatedAt: null, loadError: false };
+  let toastTimeout;
+  let saving = false;
+  let catalog;
+  function node(tag, className, text) {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = text;
+    return element;
+  }
+  function action(text, className, handler) {
+    const button = node('button', className, text);
+    button.type = 'button';
+    button.addEventListener('click', () => run(handler));
+    return button;
+  }
+  function link(text, url, className) {
+    const a = node('a', className, text);
+    a.href = RadarCore.safeUrl(url) || '#';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    return a;
+  }
+  function toast(text) {
+    $('#toast').textContent = text;
+    $('#toast').hidden = false;
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => { $('#toast').hidden = true; }, 5000);
+  }
+  async function run(handler) {
+    try { await handler(); } catch (error) { console.error(error); toast(error.message || 'Something went wrong. Please try again.'); }
+  }
+  async function readStorage() {
+    if (api) return api.storage.local.get(['radarSaved', 'radarTimezone', 'radarReminderHours']);
+    return JSON.parse(localStorage.getItem('cse-radar-preview') || '{}');
+  }
+  async function writeStorage(values) {
+    if (api) await api.storage.local.set(values);
+    else localStorage.setItem('cse-radar-preview', JSON.stringify({ ...await readStorage(), ...values }));
+  }
+  function hydrate(stored) {
+    state.saved = (Array.isArray(stored.radarSaved) ? stored.radarSaved : []).flatMap(raw => {
+      try { return [RadarCore.validateEvent(raw)]; } catch { return []; }
+    });
+    state.saved = [...new Map(state.saved.map(event => [event.id, event])).values()];
+    try {
+      if (stored.radarTimezone) { new Intl.DateTimeFormat('en', { timeZone: stored.radarTimezone }); state.zone = stored.radarTimezone; }
+    } catch { state.zone = 'Asia/Dhaka'; }
+    const hours = Number(stored.radarReminderHours ?? 24);
+    state.reminderHours = [0, 1, 24, 72, 168].includes(hours) ? hours : 24;
+  }
+  function dayKey(value, zone = state.zone) {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value));
+    const get = type => parts.find(p => p.type === type).value;
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  }
+  function todayKey() { return dayKey(Date.now()); }
+  function dateLabel(value, options = {}) {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: state.zone, day: 'numeric', month: 'short', ...options }).format(new Date(value));
+  }
+  function allDayLabel(value, options = {}) {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', ...options }).format(new Date(value.slice(0, 10) + 'T12:00:00Z'));
+  }
+  function lastDate(event) {
+    return new Date(Date.parse(event.end.slice(0, 10) + 'T00:00:00Z') - 86400000).toISOString();
+  }
+  function eventDates(event, full = false) {
+    if (!event.start) return 'Dates awaiting confirmation';
+    const opts = full ? { year: 'numeric' } : {};
+    const start = event.allDay ? allDayLabel(event.start, opts) : dateLabel(event.start, opts);
+    const end = event.allDay ? allDayLabel(lastDate(event), opts) : dateLabel(event.end, opts);
+    return start === end ? start : `${start} – ${end}`;
+  }
+  function dateTimeLabel(value) { return dateLabel(value, { year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) + ` (${state.zone})`; }
+  function isUpcoming(event) {
+    if (event.status === 'cancelled') return false;
+    if (!event.end) return true;
+    return event.allDay ? event.end.slice(0, 10) > todayKey() : Date.parse(event.end) > Date.now();
+  }
+  function isSaved(id) { return state.saved.some(event => event.id === id); }
+  function allEvents() {
+    const merged = new Map(state.saved.map(event => [event.id, event]));
+    state.events.forEach(event => merged.set(event.id, event));
+    return [...merged.values()];
+  }
+  function getEvent(id) { return allEvents().find(event => event.id === id); }
+  function visibleEvents() {
+    let events = allEvents();
+    if (state.route === 'saved') events = events.filter(event => isSaved(event.id));
+    else if (state.route === 'deadlines') events = events.filter(event => event.status !== 'cancelled' && event.deadline && Date.parse(event.deadline) > Date.now());
+    else events = events.filter(isUpcoming);
+    return events.filter(event =>
+      (state.category === 'all' || event.category === state.category) &&
+      (state.scope === 'all' || event.scope === state.scope) &&
+      (state.mode === 'all' || event.mode === state.mode) &&
+      (!state.query || [event.title, event.organizer, event.description, event.country, event.city, ...event.tags].join(' ').toLowerCase().includes(state.query))
+    ).sort((a, b) => {
+      const key = state.route === 'deadlines' ? 'deadline' : 'start';
+      return (a[key] ? Date.parse(a[key]) : Infinity) - (b[key] ? Date.parse(b[key]) : Infinity) || a.title.localeCompare(b.title);
+    });
+  }
+  function badge(event) { return node('span', `badge ${event.category}`, categoryNames[event.category]); }
+  function deadlineText(event) {
+    if (event.status === 'cancelled') return 'Cancelled — check organizer';
+    if (event.status === 'awaiting-dates') return 'Schedule needs confirmation';
+    if (!event.deadline) return 'Registration cutoff not published';
+    if (Date.parse(event.deadline) < Date.now()) return `Registration closed ${dateLabel(event.deadline)}`;
+    return `Register by ${dateLabel(event.deadline, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`;
+  }
+  function eventCard(event) {
+    const card = node('article', 'event-card');
+    const top = node('div', 'card-top');
+    const badges = node('div');
+    badges.append(badge(event), node('span', 'card-format', modeNames[event.mode]));
+    const saved = isSaved(event.id);
+    const save = action(saved ? '✓' : '+', `save-button${saved ? ' saved' : ''}`, () => toggleSave(event));
+    save.setAttribute('aria-label', `${saved ? 'Remove' : 'Save'} ${event.title}${saved ? ' from' : ' to'} my calendar`);
+    save.setAttribute('aria-pressed', String(saved));
+    top.append(badges, save);
+    const heading = node('h3');
+    heading.append(action(event.title, 'event-title-button', () => openDetail(event.id)));
+    const meta = node('div', 'card-meta');
+    const dates = node('span'); dates.append(node('span', 'meta-symbol', '▦'), document.createTextNode(eventDates(event)));
+    const place = node('span'); place.append(node('span', 'meta-symbol', '⌾'), document.createTextNode(event.mode === 'online' ? 'Join from anywhere' : [event.city, event.country].filter(Boolean).join(', ')));
+    meta.append(dates, place);
+    const bottom = node('div', 'card-bottom');
+    const deadline = node('span', `deadline${!event.deadline ? ' none' : Date.parse(event.deadline) - Date.now() < 7 * 86400000 ? ' urgent' : ''}`, deadlineText(event));
+    bottom.append(deadline, action('View details ↗', 'text-button', () => openDetail(event.id)));
+    card.append(top, heading, node('p', 'organizer', event.organizer), meta, bottom);
+    return card;
+  }
+  function render() {
+    const upcoming = allEvents().filter(isUpcoming);
+    $('#discover-count').textContent = upcoming.length;
+    $('#saved-count').textContent = state.saved.length;
+    $('#stat-upcoming').textContent = upcoming.filter(e => e.start).length;
+    $('#stat-online').textContent = upcoming.filter(e => e.mode === 'online').length;
+    $('#stat-local').textContent = upcoming.filter(e => e.scope === 'local').length;
+    $('#stat-deadlines').textContent = upcoming.filter(e => e.deadline && Date.parse(e.deadline) > Date.now() && Date.parse(e.deadline) <= Date.now() + 7 * 86400000).length;
+    $('#timezone-label').textContent = state.zone;
+    $('#calendar-zone').textContent = state.zone;
+    $('#route-label').textContent = routeNames[state.route];
+    $$('[data-route]').forEach(b => { b.classList.toggle('active', b.dataset.route === state.route); if (b.dataset.route === state.route) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+    $('#hero').hidden = state.route !== 'discover';
+    $('#events-section').hidden = state.route === 'sources';
+    $('#sources-section').hidden = state.route !== 'sources';
+    $('#section-title').firstChild.textContent = ({ discover: 'Explore opportunities ', saved: 'Your saved opportunities ', deadlines: 'Registration deadlines ' })[state.route] || 'Explore opportunities ';
+    const events = visibleEvents();
+    $('#result-count').textContent = events.length;
+    const custom = state.saved.filter(e => e.id.startsWith('custom-')).length;
+    $('#results-note').textContent = state.route === 'saved' ? `${events.length} saved ${events.length === 1 ? 'opportunity' : 'opportunities'} · reminders ${state.reminderHours === 0 ? 'off' : preview ? 'available in the installed extension' : `${state.reminderHours}h before dates`}` : state.route === 'deadlines' ? 'Only explicitly published registration cutoffs appear here.' : 'Upcoming + awaiting dates · sorted by start date';
+    const list = $('#event-list');
+    list.replaceChildren(...events.map(eventCard));
+    $('#empty-state').hidden = events.length > 0;
+    $('#empty-copy').textContent = state.route === 'saved' ? 'Save an event with the + button, or add one you found yourself.' : state.route === 'deadlines' ? 'No verified future registration cutoffs match. You can add a known deadline to your own event.' : state.loadError ? 'The bundled catalog could not load. Add an event yourself or try reopening CSE Radar.' : 'Try another filter or browse the official event sources.';
+    $('#catalog-status').textContent = `${preview ? 'Browser preview · notifications require installation. ' : ''}${state.updatedAt ? `Catalog checked ${state.updatedAt} · curated, not a live feed` : 'Catalog unavailable'}${custom ? ` · ${custom} personal ${custom === 1 ? 'event' : 'events'}` : ''}`;
+    $('#content-grid').classList.toggle('calendar-expanded', state.view === 'calendar');
+    for (const view of ['list', 'calendar']) { const b = $(`#${view}-view`); b.classList.toggle('selected', state.view === view); b.setAttribute('aria-pressed', String(state.view === view)); }
+    renderCalendar(events);
+  }
+  function calendarEntries(events, key) {
+    const entries = [];
+    for (const event of events) {
+      if (event.status === 'cancelled') continue;
+      if (event.start && state.route !== 'deadlines') {
+        const first = event.allDay ? event.start.slice(0, 10) : dayKey(event.start);
+        const last = event.allDay ? lastDate(event).slice(0, 10) : dayKey(Date.parse(event.end) - 1);
+        if (key >= first && key <= last) entries.push({ event, kind: 'event' });
+      }
+      if (event.deadline && dayKey(event.deadline) === key) entries.push({ event, kind: 'deadline' });
+    }
+    return entries;
+  }
+  function renderCalendar(events) {
+    const monthStart = new Date(state.month + '-01T12:00:00Z');
+    $('#month-label').textContent = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(monthStart);
+    const offset = (monthStart.getUTCDay() + 6) % 7;
+    const grid = $('#calendar-grid'); grid.replaceChildren();
+    const start = new Date(monthStart); start.setUTCDate(1 - offset);
+    const lastOfMonth = new Date(monthStart); lastOfMonth.setUTCMonth(lastOfMonth.getUTCMonth() + 1, 0);
+    const cellCount = Math.ceil((offset + lastOfMonth.getUTCDate()) / 7) * 7;
+    for (let index = 0; index < cellCount; index++) {
+      const date = new Date(start); date.setUTCDate(start.getUTCDate() + index);
+      const key = date.toISOString().slice(0, 10);
+      const entries = calendarEntries(events, key);
+      const day = action('', `calendar-day${key.slice(0, 7) !== state.month ? ' outside' : ''}${key === todayKey() ? ' today' : ''}${key === state.day ? ' selected' : ''}`, () => { state.day = key; renderCalendar(visibleEvents()); });
+      day.append(node('span', '', String(date.getUTCDate())));
+      const markers = node('span', 'calendar-markers');
+      if (entries.some(e => e.kind === 'event')) markers.append(node('i', 'event-dot'));
+      if (entries.some(e => e.kind === 'deadline')) markers.append(node('i', 'deadline-dot'));
+      day.append(markers);
+      day.setAttribute('aria-label', `${allDayLabel(key, { weekday: 'long', year: 'numeric' })}, ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`);
+      day.setAttribute('aria-pressed', String(key === state.day));
+      if (key === todayKey()) day.setAttribute('aria-current', 'date');
+      grid.append(day);
+    }
+    const dayPanel = $('#day-events'); dayPanel.replaceChildren();
+    if (state.day) {
+      dayPanel.append(node('h4', '', allDayLabel(state.day, { weekday: 'short', year: 'numeric' })));
+      const entries = calendarEntries(events, state.day);
+      if (!entries.length) dayPanel.append(node('p', '', 'No matching events on this date. Browse another month or adjust your filters.'));
+      for (const entry of entries) {
+        const button = action('', 'day-event', () => openDetail(entry.event.id));
+        button.append(node('i', entry.kind === 'deadline' ? 'deadline-dot' : 'event-dot'), node('span', '', `${entry.kind === 'deadline' ? 'Registration: ' : ''}${entry.event.title}`));
+        dayPanel.append(button);
+      }
+    }
+  }
+  async function toggleSave(event) {
+    if (saving) return;
+    saving = true;
+    try {
+      const remove = isSaved(event.id);
+      const next = remove ? state.saved.filter(e => e.id !== event.id) : [...state.saved, RadarCore.validateEvent(event)];
+      await writeStorage({ radarSaved: next });
+      state.saved = next;
+      render();
+      if ($('#detail-dialog').open) renderDetail(event.id);
+      toast(remove ? 'Removed from your calendar.' : preview ? 'Saved in this preview. Install the extension for reminders.' : state.reminderHours === 0 ? 'Saved to your calendar. Reminders are off.' : 'Saved to your calendar. Reminders scheduled for known future dates.');
+    } finally { saving = false; }
+  }
+  function renderDetail(id) {
+    const event = getEvent(id);
+    if (!event) { $('#detail-dialog').close(); return; }
+    const content = $('#detail-content'); content.replaceChildren();
+    content.append(badge(event), node('h2', 'detail-title', event.title), node('p', 'detail-organizer', event.organizer), node('p', 'detail-description', event.description));
+    const facts = node('dl', 'detail-facts');
+    const fact = (label, value) => { const item = node('div'); item.append(node('dt', '', label), node('dd', '', value)); facts.append(item); };
+    fact('When', eventDates(event, true));
+    fact('Where', `${modeNames[event.mode]} · ${event.mode === 'online' ? 'Worldwide' : [event.city, event.country].filter(Boolean).join(', ')}`);
+    if (event.start) fact('Schedule', event.allDay ? 'Dates only; exact times not published. Check the organizer.' : `${dateTimeLabel(event.start)} → ${dateTimeLabel(event.end)}`);
+    fact('Registration deadline', event.deadline ? dateTimeLabel(event.deadline) : 'Not verified; check the official page.');
+    fact('Who can join', event.eligibility);
+    fact('Entry fee', event.fee);
+    fact('Status', { confirmed: 'Published dates', 'awaiting-dates': 'Awaiting confirmed dates', cancelled: 'Cancelled' }[event.status]);
+    content.append(facts);
+    const actions = node('div', 'detail-actions');
+    actions.append(link('Official event ↗', event.url, 'button button-dark'));
+    if (event.registrationUrl && event.status !== 'cancelled') actions.append(link('Registration page ↗', event.registrationUrl, 'button button-light'));
+    actions.append(action(isSaved(id) ? '✓ Saved · remove' : '+ Save event', 'button button-light', () => toggleSave(event)));
+    if (event.start && event.status !== 'cancelled') actions.append(action('Export calendar .ics', 'button button-light', () => downloadCalendar([event])));
+    if (event.deadline && event.status !== 'cancelled') actions.append(action('Export deadline .ics', 'button button-light', () => downloadCalendar([event], true)));
+    content.append(actions);
+    const footnote = node('p', 'source-footnote');
+    footnote.append(link('View source', event.sourceUrl), document.createTextNode(` · Last checked ${event.lastChecked}. ${event.id.startsWith('custom-') ? 'Personal entry; details supplied by you.' : 'Curated entry; details can change.'}`));
+    if (event.allDay) footnote.append(document.createTextNode(' Browser reminders use the start of the published date in the source timezone; attendance times must be checked separately.'));
+    content.append(footnote);
+  }
+  function openDetail(id) { state.detailId = id; renderDetail(id); if (!$('#detail-dialog').open) $('#detail-dialog').showModal(); }
+  function downloadCalendar(events, deadline = false) {
+    const exportable = events.filter(event => event.status !== 'cancelled' && (deadline ? event.deadline : event.start || event.deadline));
+    if (!exportable.length) { toast('No confirmed dates to export. Save an event with published dates first.'); return; }
+    const text = RadarCore.toICS(exportable, { deadline, includeDeadlines: !deadline });
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/calendar;charset=utf-8' }));
+    const a = node('a'); a.href = url; a.download = deadline ? 'cse-radar-deadlines.ics' : 'cse-radar-events.ics';
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast(deadline ? 'Registration deadlines exported. Import the .ics file into your calendar app.' : 'Event dates and known registration deadlines exported. Import the .ics file into your calendar app.');
+  }
+  function renderSources() {
+    $('#source-list').replaceChildren(...state.sources.map(source => {
+      const card = node('article', 'source-card');
+      card.append(node('span', 'badge', source.scope === 'local' ? 'Bangladesh' : 'International'), node('h3', '', source.name), node('p', '', source.description), link('Browse official source ↗', source.url, 'text-button'));
+      return card;
+    }));
+  }
+  function route(value) {
+    state.route = Object.hasOwn(routeNames, value) ? value : 'discover';
+    render();
+  }
+  function resetFilters() {
+    state.category = state.scope = state.mode = 'all'; state.query = '';
+    $('#search').value = ''; $('#scope-filter').value = $('#mode-filter').value = 'all';
+    $$('[data-category]').forEach(b => b.classList.toggle('selected', b.dataset.category === 'all'));
+    render();
+  }
+  async function addEvent(form) {
+    const data = new FormData(form);
+    const value = key => String(data.get(key) || '').trim();
+    const parseDate = key => {
+      if (!value(key)) return null;
+      const date = new Date(value(key));
+      if (!Number.isFinite(date.getTime())) throw new Error('Please enter valid dates.');
+      return date.toISOString();
+    };
+    const event = RadarCore.validateEvent({
+      id: 'custom-' + crypto.randomUUID(), title: value('title'), organizer: value('organizer'),
+      category: value('category'), scope: value('country').toLowerCase() === 'bangladesh' ? 'local' : 'international',
+      country: value('country'), city: value('city'), mode: value('mode'), start: parseDate('start'), end: parseDate('end'),
+      deadline: parseDate('deadline'), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      eligibility: value('eligibility') || 'Check the organizer’s rules', fee: 'Check the official event page',
+      description: value('description') || 'Personal event added by you. Check the official organizer for complete details.',
+      url: value('url'), registrationUrl: null, sourceUrl: value('url'), lastChecked: dayKey(Date.now(), 'Asia/Dhaka'), status: 'confirmed', tags: []
+    });
+    if (Date.parse(event.end) <= Date.now()) throw new Error('Please add an event that has not ended yet.');
+    if (event.deadline && Date.parse(event.deadline) > Date.parse(event.end)) throw new Error('The registration deadline cannot be after the event ends.');
+    const next = [...state.saved, event];
+    await writeStorage({ radarSaved: next }); state.saved = next;
+    form.reset(); $('#add-dialog').close(); resetFilters();
+    state.month = dayKey(event.start).slice(0, 7); state.day = dayKey(event.start);
+    location.hash = 'saved'; route('saved');
+    toast(preview ? 'Event saved. Browser notifications are available after installation.' : 'Event saved to your calendar.');
+  }
+  function openSettings() {
+    $('#timezone-select').value = state.zone;
+    $('#reminder-select').value = String(state.reminderHours);
+    $('#settings-dialog').showModal();
+  }
+  async function init() {
+    const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!['Asia/Dhaka', 'UTC'].includes(localZone)) $('#timezone-select').append(new Option(`Device (${localZone})`, localZone));
+    $('#input-zone').textContent = `Enter dates in your device timezone (${localZone}). The calendar converts them to your selected display timezone.`;
+    try { hydrate(await readStorage()); } catch (error) { toast('Saved events could not be read. Check browser storage settings.'); console.error(error); }
+    if (![...$('#timezone-select').options].some(option => option.value === state.zone)) $('#timezone-select').append(new Option(state.zone, state.zone));
+    state.month = todayKey().slice(0, 7); state.day = todayKey();
+    const results = await Promise.allSettled([fetch('data/events.json').then(r => { if (!r.ok) throw new Error('Catalog unavailable'); return r.json(); }), fetch('data/sources.json').then(r => { if (!r.ok) throw new Error('Sources unavailable'); return r.json(); })]);
+    if (results[0].status === 'fulfilled') {
+      catalog = results[0].value;
+      let invalidCount = 0;
+      state.events = (Array.isArray(catalog.events) ? catalog.events : []).flatMap(raw => { try { return [RadarCore.validateEvent(raw)]; } catch (error) { invalidCount++; console.error('Skipped invalid catalog entry:', error); return []; } });
+      state.events = [...new Map(state.events.map(e => [e.id, e])).values()];
+      state.updatedAt = RadarCore.validDate(catalog.updatedAt, true) ? catalog.updatedAt : null;
+      if (invalidCount) toast(`${invalidCount} invalid catalog ${invalidCount === 1 ? 'entry was' : 'entries were'} skipped.`);
+      // Refresh saved organizer entries so reminders use the current published schedule.
+      const refreshed = state.saved.map(saved => state.events.find(e => e.id === saved.id) || saved);
+      if (JSON.stringify(refreshed) !== JSON.stringify(state.saved)) {
+        try { await writeStorage({ radarSaved: refreshed }); state.saved = refreshed; } catch (error) { toast('Saved schedules could not be refreshed.'); console.error(error); }
+      }
+    } else { state.loadError = true; toast('Could not load the event catalog. Your saved events remain available.'); }
+    if (results[1].status === 'fulfilled') state.sources = (Array.isArray(results[1].value) ? results[1].value : []).filter(source => typeof source.name === 'string' && typeof source.description === 'string' && RadarCore.safeUrl(source.url));
+    else $('#source-list').append(node('p', 'load-error', 'The source directory could not load. Please reopen CSE Radar.'));
+    if (state.sources.length) renderSources();
+    route(location.hash.slice(1));
+    $$('[data-route]').forEach(button => button.addEventListener('click', () => { location.hash = button.dataset.route; route(button.dataset.route); }));
+    window.addEventListener('hashchange', () => route(location.hash.slice(1)));
+    $$('[data-category]').forEach(button => button.addEventListener('click', () => {
+      state.category = button.dataset.category;
+      $$('[data-category]').forEach(b => { b.classList.toggle('selected', b === button); b.setAttribute('aria-pressed', String(b === button)); });
+      render();
+    }));
+    $('#search').addEventListener('input', event => { state.query = event.target.value.trim().toLowerCase(); render(); });
+    $('#scope-filter').addEventListener('change', event => { state.scope = event.target.value; render(); });
+    $('#mode-filter').addEventListener('change', event => { state.mode = event.target.value; render(); });
+    $('#clear-filters').addEventListener('click', resetFilters);
+    for (const view of ['list', 'calendar']) $(`#${view}-view`).addEventListener('click', () => { state.view = view; render(); });
+    for (const [id, delta] of [['previous-month', -1], ['next-month', 1]]) $(`#${id}`).addEventListener('click', () => {
+      const date = new Date(state.month + '-01T12:00:00Z'); date.setUTCMonth(date.getUTCMonth() + delta); state.month = date.toISOString().slice(0, 7); state.day = state.month + '-01'; render();
+    });
+    $('#calendar-today').addEventListener('click', () => { state.month = todayKey().slice(0, 7); state.day = todayKey(); render(); });
+    $('#export-saved').addEventListener('click', () => run(() => downloadCalendar(state.saved.map(e => getEvent(e.id) || e))));
+    $('#add-open').addEventListener('click', () => { $('#form-error').textContent = ''; $('#add-dialog').showModal(); });
+    $('#settings-open').addEventListener('click', openSettings);
+    // Preferences remain reachable on narrow screens where the sidebar footer is hidden.
+    $('#timezone-label').tabIndex = 0; $('#timezone-label').setAttribute('role', 'button'); $('#timezone-label').setAttribute('aria-label', 'Open timezone and reminder preferences');
+    $('#timezone-label').addEventListener('click', openSettings);
+    $('#timezone-label').addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openSettings(); } });
+    const mobileSettings = action('Preferences', 'text-button', openSettings); $('.page-footer').append(mobileSettings);
+    $$('[data-close]').forEach(button => button.addEventListener('click', () => $(`#${button.dataset.close}`).close()));
+    $$('dialog').forEach(dialog => dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } }));
+    $('#add-form').addEventListener('submit', async event => {
+      event.preventDefault(); $('#form-error').textContent = '';
+      const button = $('[type="submit"]', event.target); button.disabled = true;
+      try { await addEvent(event.target); } catch (error) { $('#form-error').textContent = error.message || 'Could not save the event.'; } finally { button.disabled = false; }
+    });
+    $('#settings-form').addEventListener('submit', event => run(async () => {
+      event.preventDefault();
+      const zone = $('#timezone-select').value; const hours = Number($('#reminder-select').value);
+      await writeStorage({ radarTimezone: zone, radarReminderHours: hours }); state.zone = zone; state.reminderHours = hours;
+      $('#settings-dialog').close(); render(); toast('Preferences saved.');
+    }));
+    if (api) api.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && (changes.radarSaved || changes.radarTimezone || changes.radarReminderHours)) run(async () => { hydrate(await readStorage()); render(); if ($('#detail-dialog').open) renderDetail(state.detailId); });
+    });
+    else window.addEventListener('storage', event => { if (event.key === 'cse-radar-preview') run(async () => { hydrate(await readStorage()); render(); }); });
+    setInterval(() => { if (!document.hidden) render(); }, 60000);
+  }
+  init().catch(error => { console.error(error); toast('CSE Radar could not start. Please reload the page.'); });
+})();

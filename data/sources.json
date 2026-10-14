@@ -1,0 +1,65 @@
+[
+  {
+    "id": "nasa-space-apps",
+    "name": "NASA Space Apps Challenge",
+    "url": "https://www.spaceappschallenge.org/",
+    "scope": "international",
+    "description": "Official global announcement, challenges, participant resources and local-event directory. Local organizers determine venue and detailed schedules."
+  },
+  {
+    "id": "mlh-global-hack-week",
+    "name": "MLH Global Hack Week",
+    "url": "https://ghw.mlh.com/",
+    "scope": "international",
+    "description": "Official Major League Hacking online hack weeks, workshops and registration links."
+  },
+  {
+    "id": "mlh-hackathons",
+    "name": "Major League Hacking",
+    "url": "https://www.mlh.com/",
+    "scope": "international",
+    "description": "Hackathon discovery and developer programs from the official MLH network. Check each organizer's eligibility and deadlines."
+  },
+  {
+    "id": "itch-jams",
+    "name": "itch.io Game Jams",
+    "url": "https://itch.io/jams",
+    "scope": "international",
+    "description": "Organizer-hosted game jam listings. Community submissions vary in quality; verify each jam's rules and dates."
+  },
+  {
+    "id": "icpc-dhaka",
+    "name": "ICPC Asia Dhaka Regional Registry",
+    "url": "https://icpc.global/regionals/finder/NCPC-2027",
+    "scope": "local",
+    "description": "Official registry for the 2026 Dhaka regional. Current dates differ from the host university website and require clarification."
+  },
+  {
+    "id": "iubat-icpc",
+    "name": "IUBAT ICPC Dhaka Regional",
+    "url": "https://iubat.ac.bd/icpc/",
+    "scope": "local",
+    "description": "Host university's contest announcement, eligibility and schedule. Check the schedule before registering because published dates currently conflict."
+  },
+  {
+    "id": "buet-cse-news",
+    "name": "BUET CSE News",
+    "url": "https://cse.buet.ac.bd/web/home/all_news",
+    "scope": "local",
+    "description": "Official department announcements for CSE fests, programming contests and research events. Existing 2026 fest coverage describes a completed event."
+  },
+  {
+    "id": "mist-computer-club",
+    "name": "MIST Computer Club",
+    "url": "https://computerclub.mist.ac.bd/",
+    "scope": "local",
+    "description": "University computer club contest listings, ICPC resources and programming community updates. No future fest date is asserted here."
+  },
+  {
+    "id": "basis-space-apps",
+    "name": "BASIS NASA Space Apps Bangladesh",
+    "url": "https://nsac.basis.org.bd/",
+    "scope": "local",
+    "description": "Bangladesh Space Apps organizer resources. Check current announcements; this source entry does not assert a verified 2026 local schedule."
+  }
+]
