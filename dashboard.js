@@ -7,7 +7,8 @@
   const categoryNames = { hackathon: 'Hackathon', gamejam: 'Game jam', contest: 'Contest', fest: 'Tech fest', workshop: 'Workshop', conference: 'Conference' };
   const modeNames = { online: 'Online', 'in-person': 'In person', hybrid: 'Hybrid' };
   const routeNames = { discover: 'Discover', saved: 'My calendar', deadlines: 'Deadlines', sources: 'Event sources' };
-  const state = { events: [], sources: [], saved: [], zone: 'Asia/Dhaka', reminderHours: 24, route: 'discover', category: 'all', scope: 'all', mode: 'all', query: '', view: 'list', month: '', day: null, detailId: null, updatedAt: null, loadError: false, feedEnabled: false, feedStatus: {}, feedBusy: false, catalogOrigin: 'bundled', cachedCatalog: null };
+  const state = { events: [], sources: [], saved: [], zone: 'Asia/Dhaka', reminderHours: 24, route: 'discover', category: 'all', scope: 'all', mode: 'all', freeOnly: false, deadlineFilter: 'all', query: '', view: 'list', month: '', day: null, detailId: null, updatedAt: null, loadError: false, feedEnabled: false, feedStatus: {}, feedBusy: false, catalogOrigin: 'bundled', cachedCatalog: null };
+  let formContext = { editId: null, draftId: null, sourceUrl: null, tags: [] };
   let toastTimeout;
   let saving = false;
   let catalog;
@@ -106,6 +107,8 @@
       (state.category === 'all' || event.category === state.category) &&
       (state.scope === 'all' || event.scope === state.scope) &&
       (state.mode === 'all' || event.mode === state.mode) &&
+      (!state.freeOnly || RadarPlanning.isExplicitlyFree(event.fee)) &&
+      RadarPlanning.matchesDeadline(event, state.deadlineFilter) &&
       (!state.query || [event.title, event.organizer, event.description, event.country, event.city, ...event.tags].join(' ').toLowerCase().includes(state.query))
     ).sort((a, b) => {
       const key = state.route === 'deadlines' ? 'deadline' : 'start';
@@ -162,6 +165,8 @@
     $('#result-count').textContent = events.length;
     const custom = state.saved.filter(e => e.id.startsWith('custom-')).length;
     $('#results-note').textContent = state.route === 'saved' ? `${events.length} saved ${events.length === 1 ? 'opportunity' : 'opportunities'} · reminders ${state.reminderHours === 0 ? 'off' : preview ? 'available in the installed extension' : `${state.reminderHours}h before dates`}` : state.route === 'deadlines' ? 'Only explicitly published registration cutoffs appear here.' : 'Upcoming + awaiting dates · sorted by start date';
+    if (state.freeOnly) $('#results-note').textContent += ' · Explicitly listed free entry';
+    if (state.deadlineFilter === 'exclude-closed') $('#results-note').textContent += ' · Unknown cutoffs remain visible';
     const list = $('#event-list');
     list.replaceChildren(...events.map(eventCard));
     $('#empty-state').hidden = events.length > 0;
@@ -263,6 +268,10 @@
     actions.append(link('Official event ↗', event.url, 'button button-dark'));
     if (event.registrationUrl && event.status !== 'cancelled') actions.append(link('Registration page ↗', event.registrationUrl, 'button button-light'));
     actions.append(action(isSaved(id) ? '✓ Saved · remove' : '+ Save event', 'button button-light', () => toggleSave(event)));
+    if (isSaved(id) && id.startsWith('custom-')) {
+      const edit = action('Edit personal event', 'button button-light', () => openEventForm(event));
+      edit.id = 'edit-personal-event'; actions.append(edit);
+    }
     if (event.start && event.status !== 'cancelled') actions.append(action('Export calendar .ics', 'button button-light', () => downloadCalendar([event])));
     if (event.deadline && event.status !== 'cancelled') actions.append(action('Export deadline .ics', 'button button-light', () => downloadCalendar([event], true)));
     content.append(actions);
@@ -294,6 +303,8 @@
   }
   function resetFilters() {
     state.category = state.scope = state.mode = 'all'; state.query = '';
+    state.freeOnly = false; state.deadlineFilter = 'all';
+    $('#free-filter').checked = false; $('#deadline-filter').value = 'all';
     $('#search').value = ''; $('#scope-filter').value = $('#mode-filter').value = 'all';
     $$('[data-category]').forEach(b => b.classList.toggle('selected', b.dataset.category === 'all'));
     render();
@@ -303,26 +314,112 @@
     const value = key => String(data.get(key) || '').trim();
     const parseDate = key => {
       if (!value(key)) return null;
-      const date = new Date(value(key));
-      if (!Number.isFinite(date.getTime())) throw new Error('Please enter valid dates.');
-      return date.toISOString();
+      return RadarPlanning.zonedLocalToISO(value(key), value('timezone'));
     };
+    const allDay = form.elements.namedItem('allDay').checked;
+    const start = allDay ? RadarPlanning.dateOnlyToISO(value('start'), value('timezone')) : parseDate('start');
+    const end = allDay ? RadarPlanning.dateOnlyToISO(RadarPlanning.shiftDay(value('end'), 1), value('timezone')) : parseDate('end');
+    const editId = formContext.editId;
+    const draftId = formContext.draftId;
     const event = RadarCore.validateEvent({
-      id: 'custom-' + crypto.randomUUID(), title: value('title'), organizer: value('organizer'),
+      id: editId || 'custom-' + crypto.randomUUID(), title: value('title'), organizer: value('organizer'),
       category: value('category'), scope: value('country').toLowerCase() === 'bangladesh' ? 'local' : 'international',
-      country: value('country'), city: value('city'), mode: value('mode'), start: parseDate('start'), end: parseDate('end'),
-      deadline: parseDate('deadline'), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      eligibility: value('eligibility') || 'Check the organizer’s rules', fee: 'Check the official event page',
+      country: value('country'), city: value('city'), mode: value('mode'), start, end, allDay,
+      deadline: parseDate('deadline'), timezone: value('timezone'),
+      eligibility: value('eligibility') || 'Check the organizer’s rules', fee: value('fee') || 'Check the official event page',
       description: value('description') || 'Personal event added by you. Check the official organizer for complete details.',
-      url: value('url'), registrationUrl: null, sourceUrl: value('url'), lastChecked: dayKey(Date.now(), 'Asia/Dhaka'), status: 'confirmed', tags: []
+      url: value('url'), registrationUrl: value('registrationUrl') || null, sourceUrl: formContext.sourceUrl || value('url'), lastChecked: dayKey(Date.now(), 'Asia/Dhaka'), status: value('status'), tags: formContext.tags
     });
-    if (Date.parse(event.end) <= Date.now()) throw new Error('Please add an event that has not ended yet.');
+    if (!editId && Date.parse(event.end) <= Date.now()) throw new Error('Please add an event that has not ended yet.');
     if (event.deadline && Date.parse(event.deadline) > Date.parse(event.end)) throw new Error('The registration deadline cannot be after the event ends.');
     await mutateSaved('save', event);
-    form.reset(); $('#add-dialog').close(); resetFilters();
-    state.month = dayKey(event.start).slice(0, 7); state.day = dayKey(event.start);
+    if (api && draftId) {
+      try { await api.runtime.sendMessage({ type: 'radar:draft:delete', id: draftId }); } catch (error) { console.error('Draft cleanup will retry on expiry:', error); }
+      const url = new URL(location.href); url.searchParams.delete('draft'); history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+    form.reset(); formContext = { editId: null, draftId: null, sourceUrl: null, tags: [] }; $('#add-dialog').close(); resetFilters();
+    const day = event.allDay ? event.start.slice(0, 10) : dayKey(event.start);
+    state.month = day.slice(0, 7); state.day = day;
     location.hash = 'saved'; route('saved');
-    toast(preview ? 'Event saved. Browser notifications are available after installation.' : 'Event saved to your calendar.');
+    toast(editId ? 'Personal event updated. Reminders follow its new schedule.' : preview ? 'Event saved. Browser notifications are available after installation.' : 'Event saved to your calendar.');
+  }
+  function updateInputZone() {
+    const zone = $('#add-form').elements.namedItem('timezone').value.trim() || 'your selected timezone';
+    $('#input-zone').textContent = `Enter event times and exact registration cutoffs in ${zone}. For dates-only events, the last day is inclusive and reminders use the beginning of the listed date.`;
+  }
+  function setDateMode(allDay) {
+    const form = $('#add-form');
+    for (const key of ['start', 'end']) {
+      const input = form.elements.namedItem(key);
+      const previous = input.value;
+      input.type = allDay ? 'date' : 'datetime-local';
+      input.step = '1';
+      input.value = allDay ? previous.slice(0, 10) : previous.includes('T') ? previous : '';
+    }
+    form.elements.namedItem('allDay').checked = allDay;
+    $('#start-label-text').textContent = allDay ? 'First day' : 'Starts';
+    $('#end-label-text').textContent = allDay ? 'Last day (inclusive)' : 'Ends';
+    updateInputZone();
+  }
+  function openEventForm(event = null) {
+    if (event && (!event.id.startsWith('custom-') || !isSaved(event.id))) throw new Error('Only your personal saved events can be edited.');
+    const form = $('#add-form'); form.reset();
+    formContext = { editId: event?.id || null, draftId: null, sourceUrl: event?.sourceUrl || null, tags: event?.tags || [] };
+    $('#capture-review-notice').hidden = true; $('#capture-warnings').replaceChildren(); $('#form-error').textContent = '';
+    $('#add-heading').textContent = event ? 'Edit personal event' : 'Add an event';
+    $('#add-intro').textContent = event ? 'Changes stay on this device. Dates and reminders update together.' : 'Save an opportunity you found. It stays in your browser.';
+    $('#event-submit').textContent = event ? 'Save changes' : 'Save to my calendar';
+    form.elements.namedItem('timezone').value = event?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    form.elements.namedItem('category').value = event?.category || 'hackathon';
+    setDateMode(event?.allDay === true);
+    if (event) {
+      for (const key of ['title', 'organizer', 'category', 'url', 'registrationUrl', 'country', 'city', 'mode', 'fee', 'eligibility', 'description', 'status']) form.elements.namedItem(key).value = event[key] || '';
+      form.elements.namedItem('start').value = !event.start ? '' : event.allDay ? event.start.slice(0, 10) : RadarPlanning.localParts(event.start, event.timezone);
+      form.elements.namedItem('end').value = !event.end ? '' : event.allDay ? RadarPlanning.shiftDay(event.end.slice(0, 10), -1) : RadarPlanning.localParts(event.end, event.timezone);
+      form.elements.namedItem('deadline').value = event.deadline ? RadarPlanning.localParts(event.deadline, event.timezone) : '';
+    }
+    updateInputZone();
+    if ($('#detail-dialog').open) $('#detail-dialog').close();
+    $('#add-dialog').showModal();
+  }
+  async function openCapturedDraft() {
+    const id = new URL(location.href).searchParams.get('draft');
+    if (!id || !api) return;
+    const result = await api.runtime.sendMessage({ type: 'radar:draft:get', id });
+    if (!result?.ok || !result.draft) { toast(result?.status?.error || 'This capture draft has expired. Capture the page again.'); return; }
+    const draft = result.draft; const candidate = draft.candidate;
+    openEventForm();
+    const form = $('#add-form');
+    formContext.draftId = id;
+    formContext.tags = ['page capture'];
+    const pageSource = RadarCore.safeUrl(draft.pageUrl || draft.sourcePageUrl);
+    formContext.sourceUrl = pageSource || RadarCore.safeUrl(candidate.url);
+    $('#add-heading').textContent = 'Review captured event';
+    $('#add-intro').textContent = 'Confirm or correct these details before adding the event to your calendar.';
+    $('#capture-review-notice').hidden = false;
+    $('#capture-source').replaceChildren();
+    const source = pageSource || RadarCore.safeUrl(candidate.url);
+    if (source) $('#capture-source').append(link(pageSource ? 'Open source page ↗' : 'Open provided event link ↗', source, 'text-button'));
+    const warnings = (draft.warnings || []).slice();
+    for (const key of ['title', 'organizer', 'url', 'country', 'city', 'fee', 'description']) form.elements.namedItem(key).value = candidate[key] || '';
+    form.elements.namedItem('category').value = RadarCore.categories.includes(candidate.category) ? candidate.category : '';
+    form.elements.namedItem('mode').value = RadarCore.modes.includes(candidate.mode) ? candidate.mode : '';
+    form.elements.namedItem('status').value = candidate.status === 'cancelled' ? 'cancelled' : 'confirmed';
+    const allDay = candidate.allDay === true || (candidate.start && candidate.start.length === 10);
+    setDateMode(!!allDay);
+    const zone = form.elements.namedItem('timezone').value;
+    for (const key of ['start', 'end']) {
+      const value = candidate[key];
+      if (!value) continue;
+      if (allDay) form.elements.namedItem(key).value = value.slice(0, 10);
+      else if (Number.isFinite(Date.parse(value)) && value.length > 10) form.elements.namedItem(key).value = RadarPlanning.localParts(value, zone);
+    }
+    if (candidate.deadline && candidate.deadline.length > 10 && Number.isFinite(Date.parse(candidate.deadline))) form.elements.namedItem('deadline').value = RadarPlanning.localParts(candidate.deadline, zone);
+    else if (candidate.deadline) warnings.push(`The source lists a registration date (${candidate.deadline}) without an exact cutoff time. The reminder deadline stays blank until you confirm a time.`);
+    if (!candidate.mode) warnings.push('Choose the event format; the source did not specify one.');
+    if (!candidate.category) warnings.push('Choose the event category.');
+    $('#capture-warnings').replaceChildren(...warnings.map(text => node('li', '', text)));
+    updateInputZone();
   }
   function openSettings() {
     $('#timezone-select').value = state.zone;
@@ -384,7 +481,7 @@
   async function init() {
     const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!['Asia/Dhaka', 'UTC'].includes(localZone)) $('#timezone-select').append(new Option(`Device (${localZone})`, localZone));
-    $('#input-zone').textContent = `Enter dates in your device timezone (${localZone}). The calendar converts them to your selected display timezone.`;
+    updateInputZone();
     try { hydrate(await readStorage()); } catch (error) { toast('Saved events could not be read. Check browser storage settings.'); console.error(error); }
     if (![...$('#timezone-select').options].some(option => option.value === state.zone)) $('#timezone-select').append(new Option(state.zone, state.zone));
     state.month = todayKey().slice(0, 7); state.day = todayKey();
@@ -418,14 +515,19 @@
     $('#search').addEventListener('input', event => { state.query = event.target.value.trim().toLowerCase(); render(); });
     $('#scope-filter').addEventListener('change', event => { state.scope = event.target.value; render(); });
     $('#mode-filter').addEventListener('change', event => { state.mode = event.target.value; render(); });
+    $('#free-filter').addEventListener('change', event => { state.freeOnly = event.target.checked; render(); });
+    $('#deadline-filter').addEventListener('change', event => { state.deadlineFilter = event.target.value; render(); });
     $('#clear-filters').addEventListener('click', resetFilters);
+    $('#reset-filter-button').addEventListener('click', resetFilters);
     for (const view of ['list', 'calendar']) $(`#${view}-view`).addEventListener('click', () => { state.view = view; render(); });
     for (const [id, delta] of [['previous-month', -1], ['next-month', 1]]) $(`#${id}`).addEventListener('click', () => {
       const date = new Date(state.month + '-01T12:00:00Z'); date.setUTCMonth(date.getUTCMonth() + delta); state.month = date.toISOString().slice(0, 7); state.day = state.month + '-01'; render();
     });
     $('#calendar-today').addEventListener('click', () => { state.month = todayKey().slice(0, 7); state.day = todayKey(); render(); });
     $('#export-saved').addEventListener('click', () => run(() => downloadCalendar(state.saved.map(e => getEvent(e.id) || e))));
-    $('#add-open').addEventListener('click', () => { $('#form-error').textContent = ''; $('#add-dialog').showModal(); });
+    $('#add-open').addEventListener('click', () => run(() => openEventForm()));
+    $('#all-day-toggle').addEventListener('change', event => setDateMode(event.target.checked));
+    $('#add-form').elements.namedItem('timezone').addEventListener('input', updateInputZone);
     $('#settings-open').addEventListener('click', openSettings);
     $('#feed-manage').addEventListener('click', openSettings);
     $('#feed-enable').addEventListener('click', () => run(toggleFeed));
@@ -453,6 +555,7 @@
     });
     else window.addEventListener('storage', event => { if (event.key === 'cse-radar-preview') run(async () => { hydrate(await readStorage()); render(); }); });
     setInterval(() => { if (!document.hidden) render(); }, 60000);
+    await openCapturedDraft();
   }
   init().catch(error => { console.error(error); toast('CSE Radar could not start. Please reload the page.'); });
 })();

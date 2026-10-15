@@ -4,6 +4,8 @@ const extensionAPI = typeof browser !== 'undefined' ? browser : chrome;
 const DAILY_ALARM = 'radar:reconcile';
 const FEED_ALARM = 'radar:feed';
 const REMINDER_PREFIX = 'radar:reminder:';
+const DRAFT_TTL = 24 * 60 * 60 * 1000;
+const DRAFT_ERROR = 'This captured event draft is unavailable or expired. Capture the page again.';
 let workQueue = Promise.resolve();
 let bundledCatalogPromise;
 function serial(task) {
@@ -82,6 +84,7 @@ async function mutateSaved(message) {
   let saved = RadarFeed.reconcileSaved(radarSaved, catalog);
   if (message.type === 'radar:save') {
     let event = RadarCore.validateEvent(message.event);
+    if (event.id.startsWith('custom-') && event.deadline && event.end && Date.parse(event.deadline) > Date.parse(event.end)) throw new Error('Registration deadline must not follow event end.');
     if (!event.id.startsWith('custom-') && catalog) event = catalog.events.find(item => item.id === event.id) || event;
     saved = saved.filter(item => item.id !== event.id).concat(event);
   } else {
@@ -91,6 +94,102 @@ async function mutateSaved(message) {
   await extensionAPI.storage.local.set({ radarSaved: saved });
   await reconcile();
   return { ok: true, saved };
+}
+function draftRecord(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid captured event.');
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype && Object.getPrototypeOf(prototype) !== null) throw new Error('Invalid captured event.');
+  for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(value))) if (descriptor.get || descriptor.set) throw new Error('Invalid captured event.');
+  return value;
+}
+function draftField(value, key) { return Object.prototype.hasOwnProperty.call(value, key) ? value[key] : undefined; }
+function draftText(value, limit) {
+  if (typeof value !== 'string' || value.length > limit || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value)) throw new Error('Invalid captured text.');
+  return value.trim();
+}
+function draftPageURL(value) {
+  if (typeof value !== 'string' || value.length > 2048) throw new Error('Invalid captured source.');
+  const url = new URL(value);
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid captured source.');
+  return url.href;
+}
+function draftCandidate(raw) {
+  raw = draftRecord(raw);
+  const candidate = {};
+  for (const [key, limit] of [['title', 180], ['organizer', 180], ['description', 2000], ['country', 120], ['city', 120], ['fee', 180]]) candidate[key] = draftText(draftField(raw, key) ?? '', limit);
+  const url = draftField(raw, 'url');
+  if (url === null || url === '' || url === undefined) candidate.url = url === '' ? '' : null;
+  else {
+    if (typeof url !== 'string' || url.length > 2048 || !RadarCore.safeUrl(url)) throw new Error('Invalid captured link.');
+    candidate.url = RadarCore.safeUrl(url);
+  }
+  for (const key of ['start', 'end', 'deadline']) {
+    const date = draftField(raw, key);
+    if (date === null || date === undefined) candidate[key] = null;
+    else if (RadarCore.validDate(date)) candidate[key] = date;
+    else throw new Error('Invalid captured date.');
+  }
+  const allDay = draftField(raw, 'allDay');
+  if (allDay !== undefined && typeof allDay !== 'boolean') throw new Error('Invalid captured date.');
+  candidate.allDay = allDay === true;
+  for (const [key, allowed] of [['mode', RadarCore.modes], ['category', RadarCore.categories]]) {
+    const value = draftField(raw, key) ?? '';
+    if (value !== '' && !allowed.includes(value)) throw new Error('Invalid captured event.');
+    candidate[key] = value;
+  }
+  const status = draftField(raw, 'status');
+  if (status !== undefined) {
+    if (status !== 'cancelled') throw new Error('Invalid captured status.');
+    candidate.status = status;
+  }
+  return candidate;
+}
+function draftCapture(raw, candidateIndex) {
+  raw = draftRecord(raw);
+  const candidates = draftField(raw, 'candidates');
+  const warnings = draftField(raw, 'warnings');
+  if (!Array.isArray(candidates) || candidates.length < 1 || candidates.length > 20 || !Number.isInteger(candidateIndex) || candidateIndex < 0 || candidateIndex >= candidates.length || !Array.isArray(warnings) || warnings.length > 12) throw new Error('Invalid captured event.');
+  // Validate the full envelope atomically even though only the chosen candidate is stored.
+  const validated = Array.from(candidates, draftCandidate);
+  const capturedAt = draftField(raw, 'capturedAt');
+  if (!RadarCore.validDate(capturedAt) || capturedAt.length <= 10) throw new Error('Invalid captured timestamp.');
+  const sourcePageUrl = draftField(raw, 'sourcePageUrl');
+  if (sourcePageUrl !== undefined && sourcePageUrl !== '') draftPageURL(sourcePageUrl);
+  return { pageUrl: draftPageURL(draftField(raw, 'pageUrl')), pageTitle: draftText(draftField(raw, 'pageTitle'), 180), capturedAt, candidate: validated[candidateIndex], warnings: Array.from(warnings, value => draftText(value, 220)) };
+}
+async function pruneDrafts() {
+  const { radarDrafts } = await extensionAPI.storage.local.get('radarDrafts');
+  const now = Date.now();
+  const drafts = (Array.isArray(radarDrafts) ? radarDrafts : []).flatMap(raw => {
+    try {
+      raw = draftRecord(raw);
+      if (typeof draftField(raw, 'id') !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(raw.id) || !Number.isFinite(draftField(raw, 'createdAt')) || raw.createdAt > now || now - raw.createdAt >= DRAFT_TTL) return [];
+      const capture = draftCapture({ pageUrl: draftField(raw, 'pageUrl'), pageTitle: draftField(raw, 'pageTitle'), capturedAt: draftField(raw, 'capturedAt'), candidates: [draftField(raw, 'candidate')], warnings: draftField(raw, 'warnings') }, 0);
+      return [{ id: raw.id, createdAt: raw.createdAt, ...capture }];
+    } catch (_) { return []; }
+  }).sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
+  if (JSON.stringify(drafts) !== JSON.stringify(radarDrafts || [])) await extensionAPI.storage.local.set({ radarDrafts: drafts });
+  return drafts;
+}
+async function draftMessage(message) {
+  let drafts = await pruneDrafts();
+  if (message.type === 'radar:draft:create') {
+    const capture = draftCapture(message.capture, message.candidateIndex);
+    const id = crypto.randomUUID();
+    const draft = { id, createdAt: Date.now(), ...capture };
+    drafts = [draft, ...drafts].slice(0, 10);
+    await extensionAPI.storage.local.set({ radarDrafts: drafts });
+    return { ok: true, id, url: extensionAPI.runtime.getURL('dashboard.html') + '?draft=' + id };
+  }
+  if (typeof message.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(message.id)) throw new Error(DRAFT_ERROR);
+  if (message.type === 'radar:draft:delete') {
+    await extensionAPI.storage.local.set({ radarDrafts: drafts.filter(draft => draft.id !== message.id) });
+    return { ok: true };
+  }
+  const draft = drafts.find(item => item.id === message.id);
+  if (!draft) throw new Error(DRAFT_ERROR);
+  const { createdAt, ...publicDraft } = draft;
+  return { ok: true, draft: publicDraft };
 }
 async function feedSchedule() {
   if (await RadarFeed.allowed(extensionAPI)) await extensionAPI.alarms.create(FEED_ALARM, { periodInMinutes: 360 });
@@ -103,13 +202,13 @@ async function refreshCatalog() {
   await syncSaved();
   return result;
 }
-extensionAPI.runtime.onInstalled.addListener(() => serial(refreshCatalog));
-extensionAPI.runtime.onStartup.addListener(() => serial(refreshCatalog));
+extensionAPI.runtime.onInstalled.addListener(() => serial(async () => { await pruneDrafts(); await refreshCatalog(); }));
+extensionAPI.runtime.onStartup.addListener(() => serial(async () => { await pruneDrafts(); await refreshCatalog(); }));
 extensionAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || !['radar:refresh', 'radar:save', 'radar:remove', 'radar:sync-saved'].includes(message.type) || !sender || sender.id !== extensionAPI.runtime.id) return false;
+  if (!message || !['radar:refresh', 'radar:save', 'radar:remove', 'radar:sync-saved', 'radar:draft:create', 'radar:draft:get', 'radar:draft:delete'].includes(message.type) || !sender || sender.id !== extensionAPI.runtime.id) return false;
   serial(async () => {
-    try { sendResponse(await (message.type === 'radar:refresh' ? refreshCatalog() : message.type === 'radar:sync-saved' ? syncSaved() : mutateSaved(message))); }
-    catch (_) { sendResponse({ ok: false, status: { error: 'Could not update CSE Radar. Try again.' } }); }
+    try { sendResponse(await (message.type.startsWith('radar:draft:') ? draftMessage(message) : message.type === 'radar:refresh' ? refreshCatalog() : message.type === 'radar:sync-saved' ? syncSaved() : mutateSaved(message))); }
+    catch (_) { sendResponse({ ok: false, status: { error: message.type.startsWith('radar:draft:') ? (message.type === 'radar:draft:create' ? 'Could not capture this event. Check the page and try again.' : DRAFT_ERROR) : 'Could not update CSE Radar. Try again.' } }); }
   });
   return true;
 });

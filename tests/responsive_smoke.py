@@ -36,7 +36,8 @@ async def layout(cdp, label):
       const context=dialog||document;
       const bad=[...context.querySelectorAll('button,input,select,textarea,a.button')]
         .filter(e=>visible(e)&&!e.disabled).flatMap(e=>{
-          const r=e.getBoundingClientRect();
+          const target=e.matches('input[type="checkbox"]') ? e.closest('label')||e : e;
+          const r=target.getBoundingClientRect();
           // Calendar dates retain seven columns; their narrowest supported width is 32px.
           const minWidth=e.matches('.calendar-day')?32:24;
           const scrolls=e.closest('.category-tabs');

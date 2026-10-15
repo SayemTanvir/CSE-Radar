@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const crypto = require('node:crypto').webcrypto;
 const core = require('../core.js');
 const feed = require('../feed.js');
 const fixture = {
@@ -123,7 +124,7 @@ async function main() {
   bg.api.storage.onChanged = listen('storage'); bg.api.permissions.onRemoved = listen('permissionRemoved');
   let incoming = catalog([{ ...fixture, start: '2030-02-10T09:00:00+06:00', end: '2030-02-11T18:00:00+06:00' }]);
   let networkGate; let networkEntered = false;
-  const sandbox = vm.createContext({ chrome: bg.api, RadarCore: core, RadarFeed: { ...feed, refresh: (api, options) => feed.refresh(api, { ...options, now, fetch: async () => { networkEntered = true; if (networkGate) await networkGate; return response(incoming); } }) }, Date, Intl, console });
+  const sandbox = vm.createContext({ chrome: bg.api, crypto, URL, RadarCore: core, RadarFeed: { ...feed, refresh: (api, options) => feed.refresh(api, { ...options, now, fetch: async () => { networkEntered = true; if (networkGate) await networkGate; return response(incoming); } }) }, Date, Intl, console });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../background.js'), 'utf8'), sandbox);
   await sandbox.reconcile();
   const oldStart = 'radar:reminder:' + fixture.id + ':start:' + Date.parse(fixture.start);
@@ -155,6 +156,13 @@ async function main() {
   assert.equal(bg.stored.radarSaved.find(event => event.id === fixture.id).status, 'cancelled');
   const stale = await send({ type: 'radar:save', event: fixture });
   assert.equal(stale.saved.find(event => event.id === fixture.id).status, 'cancelled');
+  const editedPersonal = { ...local, title: 'Edited personal event', deadline: null, start: '2030-03-10T09:00:00+06:00', end: '2030-03-11T18:00:00+06:00' };
+  assert.equal((await send({ type: 'radar:save', event: editedPersonal })).ok, true);
+  assert.equal(bg.stored.radarSaved.filter(event => event.id === local.id).length, 1);
+  assert.equal(bg.stored.radarSaved.find(event => event.id === local.id).title, editedPersonal.title);
+  assert.ok(alarms.has('radar:reminder:' + local.id + ':start:' + Date.parse(editedPersonal.start)));
+  assert.equal((await send({ type: 'radar:save', event: { ...editedPersonal, deadline: '2030-03-12T18:00:00+06:00' } })).ok, false);
+  assert.equal((await send({ type: 'radar:save', event: { ...editedPersonal, allDay: true } })).ok, false);
   const removed = await send({ type: 'radar:remove', id: local.id });
   assert.equal(removed.saved.some(event => event.id === local.id), false);
   assert.equal((await send({ type: 'radar:save', event: { id: 'bad' } })).ok, false);
@@ -163,6 +171,45 @@ async function main() {
   assert.equal(bg.stored.radarFeedEnabled, false);
   assert.equal(alarms.has('radar:feed'), false);
   console.log('PASS concurrent refresh/save keeps personal events; stale UI saves use reviewed records; removal and permission revocation persist');
+
+  const partial = { title: 'Captured event', organizer: '', description: '', url: 'https://example.org/event', start: '2030-01-10', end: null, deadline: null, allDay: true, mode: '', country: '', city: '', fee: 'Unknown', category: '' };
+  const capture = { pageUrl: 'http://example.org/source', pageTitle: 'Organizer event page', capturedAt: '2001-01-01T00:00:00Z', candidates: [partial], warnings: ['Review dates before saving.'] };
+  const savedBeforeDraft = structuredClone(bg.stored.radarSaved);
+  const catalogBeforeDraft = structuredClone(bg.stored.radarCatalog);
+  const createdDraft = await send({ type: 'radar:draft:create', capture, candidateIndex: 0 });
+  assert.equal(createdDraft.ok, true); assert.ok(createdDraft.url.endsWith('?draft=' + createdDraft.id));
+  const receivedDraft = await send({ type: 'radar:draft:get', id: createdDraft.id });
+  assert.equal(receivedDraft.ok, true); assert.equal(receivedDraft.draft.candidate.start, '2030-01-10');
+  assert.equal(receivedDraft.draft.candidate.end, null); assert.equal(receivedDraft.draft.createdAt, undefined);
+  assert.deepEqual(bg.stored.radarSaved, savedBeforeDraft); assert.deepEqual(bg.stored.radarCatalog, catalogBeforeDraft);
+  assert.ok(bg.stored.radarDrafts[0].createdAt > Date.parse(capture.capturedAt));
+  const malformedCaptures = [
+    { ...capture, pageUrl: 'javascript:alert(1)' }, { ...capture, pageUrl: 'https://user:password@example.org/' },
+    { ...capture, candidates: [{ ...partial, url: 'http://example.org/' }] },
+    { ...capture, candidates: [{ ...partial, url: 'javascript:alert(1)' }] },
+    { ...capture, candidates: [{ ...partial, start: '2030-01-10T09:00:00' }] },
+    { ...capture, candidates: [{ ...partial, title: 'x'.repeat(181) }] },
+    { ...capture, candidates: Array(21).fill(partial) }, { ...capture, candidates: Array(1) }, { ...capture, warnings: Array(1) }, { ...capture, warnings: Array(13).fill('warning') },
+    { ...capture, warnings: ['x'.repeat(221)] }, { ...capture, capturedAt: 'bad-date' },
+    { ...capture, candidates: [partial, { ...partial, url: 'javascript:bad' }] },
+    Object.create(capture), { ...capture, candidates: [Object.create(partial)] }
+  ];
+  for (const badCapture of malformedCaptures) assert.equal((await send({ type: 'radar:draft:create', capture: badCapture, candidateIndex: 0 })).ok, false);
+  assert.equal(bg.stored.radarDrafts.length, 1);
+  assert.equal((await send({ type: 'radar:draft:create', capture, candidateIndex: 99 })).ok, false);
+  assert.equal(listeners.message({ type: 'radar:draft:get', id: createdDraft.id }, { id: 'external' }, () => {}), false);
+  bg.stored.radarDrafts[0].createdAt = Date.now() - 24 * 3600000;
+  const expiredDraft = await send({ type: 'radar:draft:get', id: createdDraft.id });
+  assert.equal(expiredDraft.ok, false); assert.match(expiredDraft.status.error, /expired/);
+  assert.equal(bg.stored.radarDrafts.length, 0);
+  const ids = [];
+  for (let i = 0; i < 11; i++) ids.push((await send({ type: 'radar:draft:create', capture, candidateIndex: 0 })).id);
+  assert.equal(bg.stored.radarDrafts.length, 10);
+  assert.equal((await send({ type: 'radar:draft:get', id: ids[0] })).ok, false);
+  assert.equal((await send({ type: 'radar:draft:delete', id: ids[10] })).ok, true);
+  assert.equal((await send({ type: 'radar:draft:get', id: ids[10] })).ok, false);
+  assert.deepEqual(bg.stored.radarSaved, savedBeforeDraft);
+  console.log('PASS partial drafts stay isolated locally, preserve date uncertainty, reject unsafe/oversized capture, expire and cap at ten');
 
   let minimumPassed;
   const bundledSandbox = vm.createContext({ chrome: bg.api, RadarCore: core, RadarFeed: { ...feed, refresh: async (api, options) => { minimumPassed = options.minimumCatalog; return { ok: false, skipped: true }; } }, fetch: async () => response(newerBundle), Date, Intl, console });

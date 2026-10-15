@@ -115,6 +115,16 @@ form input, form select, form textarea { min-width: 0; min-height: 48px; font-si
 .feed-preferences .form-hint { font-size: 13px; }
 .submission-note strong { font-size: 16px; font-weight: 650; }
 .submission-note p { font-size: 14px; color: #5c734b; }
+.planning-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; margin-top: 14px; }
+.planning-filters select { flex: 0 1 330px; min-width: 0; }
+.filter-toggle { display: inline-flex; min-height: 44px; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #506746; cursor: pointer; }
+.filter-toggle input[type="checkbox"] { width: 22px; height: 22px; min-height: 0; margin: 0; flex-shrink: 0; accent-color: #24835a; }
+.date-mode-toggle { margin-bottom: 16px; }
+.capture-notice { background: #edf3e5; border: 1px solid #d7e3c9; border-radius: 8px; padding: 16px; margin-bottom: 22px; }
+.capture-notice strong { font-size: 16px; }
+.capture-notice p, .capture-notice li { font-size: 14px; line-height: 1.7; color: #526b43; }
+.capture-notice ul { padding-left: 20px; margin: 10px 0 0; }
+.capture-notice ul:empty { display: none; }
 
 @media (max-width: 1150px) {
   :root { --sidebar: 212px; }
@@ -185,6 +195,8 @@ form input, form select, form textarea { min-width: 0; min-height: 48px; font-si
   .view-switch { width: 100%; }
   .view-switch button { flex: 1; font-size: 14px; }
   .filters { gap: 10px; }
+  .planning-filters { gap: 10px; }
+  .planning-filters select { flex-basis: 100%; }
   .search { flex-basis: 100%; min-width: 0; }
   .filters > select { flex: 1 1 120px; min-width: 0; }
   .category-tabs { flex-wrap: nowrap; overflow-x: auto; padding: 3px 2px 9px; margin: 14px 0 18px; gap: 8px; scrollbar-width: thin; }

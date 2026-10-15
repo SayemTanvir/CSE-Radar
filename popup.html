@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CSE Radar</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><img src="icons/radar-48.png" width="40" height="40" alt=""><div><h1>CSE Radar</h1><p>Your next tech opportunity.</p></div></header>
+  <main>
+    <button id="open-radar" class="secondary" type="button">Open Radar calendar</button>
+    <section aria-labelledby="capture-heading">
+      <h2 id="capture-heading">Found an event?</h2>
+      <p>Capture this page’s event details, then review them in Radar before saving.</p>
+      <button id="save-page" type="button">Save this page</button>
+      <p id="capture-status" role="status" aria-live="polite"></p>
+      <div id="draft-options" hidden>
+        <label for="candidate-select">Event to review</label>
+        <select id="candidate-select"></select>
+        <ul id="warnings"></ul>
+        <button id="review-draft" type="button">Review in Radar</button>
+      </div>
+    </section>
+    <p class="privacy">Page access is used only after you click Save this page. Form values are never captured.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
