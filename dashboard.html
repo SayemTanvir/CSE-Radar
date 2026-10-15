@@ -11,6 +11,7 @@
   <script src="core.js" defer></script>
   <script src="feed.js" defer></script>
   <script src="planning.js" defer></script>
+  <script src="calendar-import.js" defer></script>
   <script src="dashboard.js" defer></script>
 </head>
 <body>
@@ -26,11 +27,11 @@
     <div class="sidebar-bottom">
       <div class="local-note"><span class="small-orbit" aria-hidden="true">◎</span><strong>A little curiosity.<br>A lot of possibility.</strong><p>Find the people, projects, and challenges that take you further.</p></div>
       <button id="settings-open" class="nav-item" aria-label="Open preferences" title="Preferences"><span aria-hidden="true">⚙</span> Preferences</button>
-      <span class="version">CSE RADAR · 0.3</span>
+      <span class="version">CSE RADAR · 0.4</span>
     </div>
   </aside>
   <main>
-    <header class="topbar"><div class="breadcrumb">Explore <span>/</span> <strong id="route-label">Discover</strong></div><div class="topbar-right"><span class="time-label" id="timezone-label">Asia/Dhaka</span><button class="button button-dark" id="add-open"><span aria-hidden="true">＋</span> Add an event</button></div></header>
+    <header class="topbar"><div class="breadcrumb">Explore <span>/</span> <strong id="route-label">Discover</strong></div><div class="topbar-right"><span class="time-label" id="timezone-label">Asia/Dhaka</span><button class="button button-light" id="import-open" type="button">Import calendar</button><button class="button button-dark" id="add-open"><span aria-hidden="true">＋</span> Add an event</button></div></header>
     <section class="hero" id="hero">
       <div><p class="eyebrow"><span class="status-dot"></span> STAY CURIOUS. SHOW UP.</p><h1>Your next big thing<br>is on the <em>radar.</em></h1><p class="hero-copy">Hackathons, game jams, and tech opportunities.<br>Discover your next challenge. Make room for it.</p><div class="hero-foot"><span>Bangladesh + beyond</span><span class="hero-divider"></span><span>Curated · official links</span></div></div>
       <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><div class="radar-sweep"></div><span class="orbit-dot dot-one"></span><span class="orbit-dot dot-two"></span><span class="orbit-dot dot-three"></span><div class="orbit-center">↗</div><span class="art-label label-one">BUILD SOMETHING</span><span class="art-label label-two">MEET YOUR PEOPLE</span></div>
@@ -47,8 +48,21 @@
     <section id="sources-section" hidden><div class="section-heading"><div><p class="eyebrow muted">GO STRAIGHT TO THE SOURCE</p><h2>Where opportunities happen</h2></div></div><p class="sources-intro">Browse organizers directly for newly announced events. CSE Radar publishes a reviewed catalog. Our collection workflow gathers leads for review; extraction alone does not confirm event details.</p><div class="submission-note"><div><strong>Found an opportunity for the community?</strong><p>Suggest an event on GitHub. A GitHub account is required; submissions are reviewed before publication. Use “Add an event” to keep it only in your own calendar.</p></div><a href="https://github.com/SayemTanvir/CSE-Radar/issues/new?template=event.yml" target="_blank" rel="noopener noreferrer" class="button button-light">Suggest an event ↗</a></div><div id="source-list" class="source-list"></div></section>
     <footer class="page-footer"><span id="catalog-status">Loading event catalog…</span><span>Dates can change. Check the organizer before registering.</span></footer>
   </main>
-  <dialog id="detail-dialog" class="detail-dialog"><button class="dialog-close" data-close="detail-dialog" aria-label="Close event details">×</button><div id="detail-content"></div></dialog>
-  <dialog id="add-dialog">
+  <dialog id="detail-dialog" class="detail-dialog" aria-labelledby="detail-heading"><button class="dialog-close" data-close="detail-dialog" aria-label="Close event details">×</button><div id="detail-content"></div></dialog>
+  <dialog id="import-dialog" aria-labelledby="import-heading">
+    <div class="dialog-heading"><h2 id="import-heading">Import an event calendar</h2><button class="dialog-close" data-close="import-dialog" aria-label="Close calendar import">×</button></div>
+    <p class="dialog-intro">Choose a local .ics file from an organizer or a calendar export. Review each event before saving; nothing is added automatically.</p>
+    <form id="calendar-import-form">
+      <label>Calendar file <span class="optional">.ics, up to 512 KB</span><input id="calendar-file" type="file" accept=".ics,text/calendar"></label>
+      <p id="import-status" class="form-hint" role="status">Choose a calendar file to get started.</p>
+      <label>Event to review<select id="import-candidate-select" disabled><option>No file selected</option></select></label>
+      <p id="import-preview" class="import-preview"></p>
+      <ul id="import-warnings" class="import-warnings"></ul>
+      <p class="privacy-note">Your file is read on this device. Calendar links, attachments, and embedded alarms are never opened or run. Recurring schedules need manual entry.</p>
+      <button id="import-review-button" class="button button-dark full-width" type="button" disabled>Review event</button>
+    </form>
+  </dialog>
+  <dialog id="add-dialog" aria-labelledby="add-heading">
     <div class="dialog-heading"><div><p class="eyebrow muted">KEEP IT ON YOUR RADAR</p><h2 id="add-heading">Add an event</h2></div><button class="dialog-close" data-close="add-dialog" aria-label="Close event form">×</button></div>
     <p class="dialog-intro" id="add-intro">Save an opportunity you found. It stays in your browser.</p>
     <section id="capture-review-notice" class="capture-notice" hidden><strong>Review before saving</strong><p>Check the organizer, dates, timezone, and eligibility against the source. Nothing has been saved yet.</p><div id="capture-source"></div><ul id="capture-warnings"></ul></section>
@@ -70,7 +84,7 @@
       <p id="form-error" class="form-error" role="alert"></p><button type="submit" id="event-submit" class="button button-dark full-width">Save to my calendar</button>
     </form>
   </dialog>
-  <dialog id="settings-dialog"><div class="dialog-heading"><h2>Preferences</h2><button class="dialog-close" data-close="settings-dialog" aria-label="Close preferences">×</button></div><section class="feed-preferences"><h3>Keep events up to date</h3><p>Download CSE Radar’s reviewed catalog every six hours while your browser is running. Updates contact GitHub to retrieve the public feed. Your saved events stay on your device and are never uploaded.</p><p id="feed-settings-status" role="status"></p><button type="button" id="feed-enable" class="button button-light">Enable event updates</button><a href="https://github.com/SayemTanvir/CSE-Radar/blob/main/data/events.json" target="_blank" rel="noopener noreferrer" class="text-button">View public feed ↗</a><p class="form-hint">This setting takes effect immediately. Turning it off stops requests and keeps your downloaded catalog for offline use.</p></section><form id="settings-form"><label>Calendar timezone<select id="timezone-select"><option value="Asia/Dhaka">Dhaka (Asia/Dhaka)</option><option value="UTC">UTC</option></select></label><label>Remind me before each event and registration deadline<select id="reminder-select"><option value="1">1 hour</option><option value="24">1 day</option><option value="72">3 days</option><option value="168">1 week</option><option value="0">Reminders off</option></select></label><p class="dialog-intro">Reminders apply to saved events. The browser must be running and system notifications enabled. If the reminder time has passed but the event is still ahead, a reminder can appear shortly after saving.</p><p class="privacy-note">Your saved events and preferences stay on this device. No account, analytics, or browsing history access.</p><button class="button button-dark full-width" type="submit">Save preferences</button></form></dialog>
+  <dialog id="settings-dialog" aria-labelledby="settings-heading"><div class="dialog-heading"><h2 id="settings-heading">Preferences</h2><button class="dialog-close" data-close="settings-dialog" aria-label="Close preferences">×</button></div><section class="feed-preferences"><h3>Keep events up to date</h3><p>Download CSE Radar’s reviewed catalog every six hours while your browser is running. Updates contact GitHub to retrieve the public feed. Your saved events stay on your device and are never uploaded.</p><p id="feed-settings-status" role="status"></p><button type="button" id="feed-enable" class="button button-light">Enable event updates</button><a href="https://github.com/SayemTanvir/CSE-Radar/blob/main/data/events.json" target="_blank" rel="noopener noreferrer" class="text-button">View public feed ↗</a><p class="form-hint">This setting takes effect immediately. Turning it off stops requests and keeps your downloaded catalog for offline use.</p></section><form id="settings-form"><label>Calendar timezone<select id="timezone-select"><option value="Asia/Dhaka">Dhaka (Asia/Dhaka)</option><option value="UTC">UTC</option></select></label><label>Remind me before each event and registration deadline<select id="reminder-select"><option value="1">1 hour</option><option value="24">1 day</option><option value="72">3 days</option><option value="168">1 week</option><option value="0">Reminders off</option></select></label><p class="dialog-intro">Reminders apply to saved events. The browser must be running and system notifications enabled. If the reminder time has passed but the event is still ahead, a reminder can appear shortly after saving.</p><p class="privacy-note">Your saved events and preferences stay on this device. No account, analytics, or browsing history access.</p><button class="button button-dark full-width" type="submit">Save preferences</button></form></dialog>
   <div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>

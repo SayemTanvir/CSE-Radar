@@ -27,7 +27,7 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - run: python -m unittest discover -s tests -p test_collection.py
-      - run: node --test tests/core.test.js tests/feed.test.js tests/catalog_data.test.js tests/planning.test.js tests/capture.test.js
+      - run: node --test tests/core.test.js tests/feed.test.js tests/catalog_data.test.js tests/planning.test.js tests/capture.test.js tests/calendar_import.test.js
 
   collect:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

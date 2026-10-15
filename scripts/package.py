@@ -42,7 +42,7 @@ def icons():
 
 def package():
     icons()
-    files = ['core.js', 'feed.js', 'planning.js', 'background.js', 'manifest.json', 'dashboard.html', 'dashboard.js', 'style.css', 'readability.css', 'capture.js', 'popup.html', 'popup.js', 'popup.css']
+    files = ['core.js', 'feed.js', 'planning.js', 'calendar-import.js', 'background.js', 'manifest.json', 'dashboard.html', 'dashboard.js', 'style.css', 'readability.css', 'capture.js', 'popup.html', 'popup.js', 'popup.css']
     missing = [name for name in files if not (ROOT / name).is_file()]
     if missing or not (ROOT / 'data/events.json').is_file():
         raise SystemExit('Source files missing: ' + ', '.join(missing or ['data/events.json']))

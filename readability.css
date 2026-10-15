@@ -125,6 +125,12 @@ form input, form select, form textarea { min-width: 0; min-height: 48px; font-si
 .capture-notice p, .capture-notice li { font-size: 14px; line-height: 1.7; color: #526b43; }
 .capture-notice ul { padding-left: 20px; margin: 10px 0 0; }
 .capture-notice ul:empty { display: none; }
+.topbar-right { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+.import-preview, .import-warnings { font-size: 14px; line-height: 1.7; color: #526b43; overflow-wrap: anywhere; }
+.import-warnings { padding-left: 20px; margin: 10px 0 20px; }
+.import-warnings:empty, .import-preview:empty { display: none; }
+#calendar-file { max-width: 100%; padding: 10px; }
+#calendar-file::file-selector-button { font: inherit; min-height: 36px; border: 0; background: #edf3e5; color: #345029; border-radius: 4px; margin-right: 8px; }
 
 @media (max-width: 1150px) {
   :root { --sidebar: 212px; }
@@ -173,6 +179,8 @@ form input, form select, form textarea { min-width: 0; min-height: 48px; font-si
   .sidebar #settings-open > span:first-child { display: inline; color: #d9efad; font-size: 24px; width: auto; }
   main { margin-left: 0; padding: 0 12px 24px; }
   .topbar { min-height: 76px; height: auto; padding: 12px 0; gap: 10px; }
+  .topbar { flex-wrap: wrap; }
+  .topbar-right { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .breadcrumb { font-size: 13px; }
   .breadcrumb span { margin: 0 5px; }
   .button { padding: 10px 12px; }

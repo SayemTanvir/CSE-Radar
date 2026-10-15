@@ -9,6 +9,7 @@
   const routeNames = { discover: 'Discover', saved: 'My calendar', deadlines: 'Deadlines', sources: 'Event sources' };
   const state = { events: [], sources: [], saved: [], zone: 'Asia/Dhaka', reminderHours: 24, route: 'discover', category: 'all', scope: 'all', mode: 'all', freeOnly: false, deadlineFilter: 'all', query: '', view: 'list', month: '', day: null, detailId: null, updatedAt: null, loadError: false, feedEnabled: false, feedStatus: {}, feedBusy: false, catalogOrigin: 'bundled', cachedCatalog: null };
   let formContext = { editId: null, draftId: null, sourceUrl: null, tags: [] };
+  const importState = { candidates: [], warnings: [], generation: 0 };
   let toastTimeout;
   let saving = false;
   let catalog;
@@ -18,11 +19,18 @@
     if (text !== undefined) element.textContent = text;
     return element;
   }
-  function action(text, className, handler) {
+  function action(text, className, handler, focusKey) {
     const button = node('button', className, text);
     button.type = 'button';
+    if (focusKey) button.dataset.focusKey = focusKey;
     button.addEventListener('click', () => run(handler));
     return button;
+  }
+  function rememberFocus() { return document.activeElement?.dataset.focusKey || null; }
+  function restoreFocus(key) {
+    if (!key) return;
+    const target = $$('[data-focus-key]').find(element => element.dataset.focusKey === key && element.getClientRects().length);
+    if (target) target.focus({ preventScroll: true });
   }
   function link(text, url, className) {
     const a = node('a', className, text);
@@ -129,23 +137,24 @@
     const badges = node('div');
     badges.append(badge(event), node('span', 'card-format', modeNames[event.mode]));
     const saved = isSaved(event.id);
-    const save = action(saved ? '✓' : '+', `save-button${saved ? ' saved' : ''}`, () => toggleSave(event));
+    const save = action(saved ? '✓' : '+', `save-button${saved ? ' saved' : ''}`, () => toggleSave(event), 'save:' + event.id);
     save.setAttribute('aria-label', `${saved ? 'Remove' : 'Save'} ${event.title}${saved ? ' from' : ' to'} my calendar`);
     save.setAttribute('aria-pressed', String(saved));
     top.append(badges, save);
     const heading = node('h3');
-    heading.append(action(event.title, 'event-title-button', () => openDetail(event.id)));
+    heading.append(action(event.title, 'event-title-button', () => openDetail(event.id), 'title:' + event.id));
     const meta = node('div', 'card-meta');
     const dates = node('span'); dates.append(node('span', 'meta-symbol', '▦'), document.createTextNode(eventDates(event)));
     const place = node('span'); place.append(node('span', 'meta-symbol', '⌾'), document.createTextNode(event.mode === 'online' ? 'Join from anywhere' : [event.city, event.country].filter(Boolean).join(', ')));
     meta.append(dates, place);
     const bottom = node('div', 'card-bottom');
     const deadline = node('span', `deadline${!event.deadline ? ' none' : Date.parse(event.deadline) - Date.now() < 7 * 86400000 ? ' urgent' : ''}`, deadlineText(event));
-    bottom.append(deadline, action('View details ↗', 'text-button', () => openDetail(event.id)));
+    bottom.append(deadline, action('View details ↗', 'text-button', () => openDetail(event.id), 'details:' + event.id));
     card.append(top, heading, node('p', 'organizer', event.organizer), meta, bottom);
     return card;
   }
   function render() {
+    const focused = rememberFocus();
     const upcoming = allEvents().filter(isUpcoming);
     $('#discover-count').textContent = upcoming.length;
     $('#saved-count').textContent = state.saved.length;
@@ -176,6 +185,7 @@
     $('#content-grid').classList.toggle('calendar-expanded', state.view === 'calendar');
     for (const view of ['list', 'calendar']) { const b = $(`#${view}-view`); b.classList.toggle('selected', state.view === view); b.setAttribute('aria-pressed', String(state.view === view)); }
     renderCalendar(events);
+    restoreFocus(focused);
   }
   function calendarEntries(events, key) {
     const entries = [];
@@ -191,6 +201,7 @@
     return entries;
   }
   function renderCalendar(events) {
+    const focused = rememberFocus();
     const monthStart = new Date(state.month + '-01T12:00:00Z');
     $('#month-label').textContent = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(monthStart);
     const offset = (monthStart.getUTCDay() + 6) % 7;
@@ -202,7 +213,7 @@
       const date = new Date(start); date.setUTCDate(start.getUTCDate() + index);
       const key = date.toISOString().slice(0, 10);
       const entries = calendarEntries(events, key);
-      const day = action('', `calendar-day${key.slice(0, 7) !== state.month ? ' outside' : ''}${key === todayKey() ? ' today' : ''}${key === state.day ? ' selected' : ''}`, () => { state.day = key; renderCalendar(visibleEvents()); });
+      const day = action('', `calendar-day${key.slice(0, 7) !== state.month ? ' outside' : ''}${key === todayKey() ? ' today' : ''}${key === state.day ? ' selected' : ''}`, () => { state.day = key; renderCalendar(visibleEvents()); }, 'date:' + key);
       day.append(node('span', '', String(date.getUTCDate())));
       const markers = node('span', 'calendar-markers');
       if (entries.some(e => e.kind === 'event')) markers.append(node('i', 'event-dot'));
@@ -219,11 +230,12 @@
       const entries = calendarEntries(events, state.day);
       if (!entries.length) dayPanel.append(node('p', '', 'No matching events on this date. Browse another month or adjust your filters.'));
       for (const entry of entries) {
-        const button = action('', 'day-event', () => openDetail(entry.event.id));
+        const button = action('', 'day-event', () => openDetail(entry.event.id), 'day:' + entry.kind + ':' + entry.event.id);
         button.append(node('i', entry.kind === 'deadline' ? 'deadline-dot' : 'event-dot'), node('span', '', `${entry.kind === 'deadline' ? 'Registration: ' : ''}${entry.event.title}`));
         dayPanel.append(button);
       }
     }
+    restoreFocus(focused);
   }
   async function toggleSave(event) {
     if (saving) return;
@@ -250,10 +262,12 @@
     }
   }
   function renderDetail(id) {
+    const focused = rememberFocus();
     const event = getEvent(id);
     if (!event) { $('#detail-dialog').close(); return; }
     const content = $('#detail-content'); content.replaceChildren();
-    content.append(badge(event), node('h2', 'detail-title', event.title), node('p', 'detail-organizer', event.organizer), node('p', 'detail-description', event.description));
+    const title = node('h2', 'detail-title', event.title); title.id = 'detail-heading';
+    content.append(badge(event), title, node('p', 'detail-organizer', event.organizer), node('p', 'detail-description', event.description));
     const facts = node('dl', 'detail-facts');
     const fact = (label, value) => { const item = node('div'); item.append(node('dt', '', label), node('dd', '', value)); facts.append(item); };
     fact('When', eventDates(event, true));
@@ -267,9 +281,9 @@
     const actions = node('div', 'detail-actions');
     actions.append(link('Official event ↗', event.url, 'button button-dark'));
     if (event.registrationUrl && event.status !== 'cancelled') actions.append(link('Registration page ↗', event.registrationUrl, 'button button-light'));
-    actions.append(action(isSaved(id) ? '✓ Saved · remove' : '+ Save event', 'button button-light', () => toggleSave(event)));
+    actions.append(action(isSaved(id) ? '✓ Saved · remove' : '+ Save event', 'button button-light', () => toggleSave(event), 'detail-save:' + id));
     if (isSaved(id) && id.startsWith('custom-')) {
-      const edit = action('Edit personal event', 'button button-light', () => openEventForm(event));
+      const edit = action('Edit personal event', 'button button-light', () => openEventForm(event), 'detail-edit:' + id);
       edit.id = 'edit-personal-event'; actions.append(edit);
     }
     if (event.start && event.status !== 'cancelled') actions.append(action('Export calendar .ics', 'button button-light', () => downloadCalendar([event])));
@@ -279,6 +293,7 @@
     footnote.append(link('View source', event.sourceUrl), document.createTextNode(` · Last checked ${event.lastChecked}. ${event.id.startsWith('custom-') ? 'Personal entry; details supplied by you.' : 'Curated entry; details can change.'}`));
     if (event.allDay) footnote.append(document.createTextNode(' Browser reminders use the start of the published date in the source timezone; attendance times must be checked separately.'));
     content.append(footnote);
+    restoreFocus(focused);
   }
   function openDetail(id) { state.detailId = id; renderDetail(id); if (!$('#detail-dialog').open) $('#detail-dialog').showModal(); }
   function downloadCalendar(events, deadline = false) {
@@ -306,7 +321,7 @@
     state.freeOnly = false; state.deadlineFilter = 'all';
     $('#free-filter').checked = false; $('#deadline-filter').value = 'all';
     $('#search').value = ''; $('#scope-filter').value = $('#mode-filter').value = 'all';
-    $$('[data-category]').forEach(b => b.classList.toggle('selected', b.dataset.category === 'all'));
+    $$('[data-category]').forEach(b => { b.classList.toggle('selected', b.dataset.category === 'all'); b.setAttribute('aria-pressed', String(b.dataset.category === 'all')); });
     render();
   }
   async function addEvent(form) {
@@ -382,44 +397,106 @@
     if ($('#detail-dialog').open) $('#detail-dialog').close();
     $('#add-dialog').showModal();
   }
-  async function openCapturedDraft() {
-    const id = new URL(location.href).searchParams.get('draft');
-    if (!id || !api) return;
-    const result = await api.runtime.sendMessage({ type: 'radar:draft:get', id });
-    if (!result?.ok || !result.draft) { toast(result?.status?.error || 'This capture draft has expired. Capture the page again.'); return; }
-    const draft = result.draft; const candidate = draft.candidate;
-    openEventForm();
+  function reviewCandidate(candidate, options = {}) {
+    const existing = options.existing || null;
+    openEventForm(existing);
     const form = $('#add-form');
-    formContext.draftId = id;
-    formContext.tags = ['page capture'];
-    const pageSource = RadarCore.safeUrl(draft.pageUrl || draft.sourcePageUrl);
-    formContext.sourceUrl = pageSource || RadarCore.safeUrl(candidate.url);
-    $('#add-heading').textContent = 'Review captured event';
-    $('#add-intro').textContent = 'Confirm or correct these details before adding the event to your calendar.';
+    formContext.draftId = options.draftId || null;
+    formContext.tags = [...new Set([...(existing?.tags || []), ...(options.tags || ['page capture'])])].slice(-20);
+    const pageSource = RadarCore.safeUrl(options.pageUrl);
+    formContext.sourceUrl = pageSource || RadarCore.safeUrl(candidate.url) || existing?.sourceUrl || null;
+    $('#add-heading').textContent = options.heading || 'Review captured event';
+    $('#add-intro').textContent = existing ? 'This event is already saved. Review this calendar update before replacing its details and rescheduling reminders.' : 'Confirm or correct these details before adding the event to your calendar.';
     $('#capture-review-notice').hidden = false;
     $('#capture-source').replaceChildren();
     const source = pageSource || RadarCore.safeUrl(candidate.url);
     if (source) $('#capture-source').append(link(pageSource ? 'Open source page ↗' : 'Open provided event link ↗', source, 'text-button'));
-    const warnings = (draft.warnings || []).slice();
-    for (const key of ['title', 'organizer', 'url', 'country', 'city', 'fee', 'description']) form.elements.namedItem(key).value = candidate[key] || '';
-    form.elements.namedItem('category').value = RadarCore.categories.includes(candidate.category) ? candidate.category : '';
-    form.elements.namedItem('mode').value = RadarCore.modes.includes(candidate.mode) ? candidate.mode : '';
+    const warnings = [...new Set([...(options.warnings || []), ...(candidate.warnings || [])])];
+    for (const key of ['title', 'organizer', 'url', 'country', 'city', 'fee', 'description']) {
+      const imported = candidate[key];
+      form.elements.namedItem(key).value = imported && !(existing && key === 'fee' && imported === 'Unknown') ? imported : existing?.[key] || '';
+    }
+    if (candidate.timezone) form.elements.namedItem('timezone').value = candidate.timezone;
+    form.elements.namedItem('category').value = RadarCore.categories.includes(candidate.category) ? candidate.category : existing?.category || '';
+    form.elements.namedItem('mode').value = RadarCore.modes.includes(candidate.mode) ? candidate.mode : existing?.mode || '';
     form.elements.namedItem('status').value = candidate.status === 'cancelled' ? 'cancelled' : 'confirmed';
     const allDay = candidate.allDay === true || (candidate.start && candidate.start.length === 10);
     setDateMode(!!allDay);
     const zone = form.elements.namedItem('timezone').value;
     for (const key of ['start', 'end']) {
       const value = candidate[key];
+      form.elements.namedItem(key).value = '';
       if (!value) continue;
       if (allDay) form.elements.namedItem(key).value = value.slice(0, 10);
       else if (Number.isFinite(Date.parse(value)) && value.length > 10) form.elements.namedItem(key).value = RadarPlanning.localParts(value, zone);
     }
+    form.elements.namedItem('deadline').value = '';
     if (candidate.deadline && candidate.deadline.length > 10 && Number.isFinite(Date.parse(candidate.deadline))) form.elements.namedItem('deadline').value = RadarPlanning.localParts(candidate.deadline, zone);
     else if (candidate.deadline) warnings.push(`The source lists a registration date (${candidate.deadline}) without an exact cutoff time. The reminder deadline stays blank until you confirm a time.`);
-    if (!candidate.mode) warnings.push('Choose the event format; the source did not specify one.');
-    if (!candidate.category) warnings.push('Choose the event category.');
+    if (!form.elements.namedItem('mode').value) warnings.push('Choose the event format; the source did not specify one.');
+    if (!form.elements.namedItem('category').value) warnings.push('Choose the event category.');
     $('#capture-warnings').replaceChildren(...warnings.map(text => node('li', '', text)));
     updateInputZone();
+  }
+  async function openCapturedDraft() {
+    const id = new URL(location.href).searchParams.get('draft');
+    if (!id || !api) return;
+    const result = await api.runtime.sendMessage({ type: 'radar:draft:get', id });
+    if (!result?.ok || !result.draft) { toast(result?.status?.error || 'This capture draft has expired. Capture the page again.'); return; }
+    const draft = result.draft;
+    reviewCandidate(draft.candidate, { draftId: id, pageUrl: draft.pageUrl || draft.sourcePageUrl, warnings: draft.warnings });
+  }
+  function updateImportPreview() {
+    const candidate = importState.candidates[Number($('#import-candidate-select').value)];
+    $('#import-review-button').disabled = !candidate;
+    if (!candidate) { $('#import-preview').textContent = ''; return; }
+    let dates = 'Dates need confirmation during review.';
+    if (candidate.start && candidate.end) {
+      if (candidate.allDay) dates = `${candidate.start} to ${candidate.end} (last day inclusive; dates only).`;
+      else {
+        const format = new Intl.DateTimeFormat('en-GB', { timeZone: candidate.timezone || 'UTC', dateStyle: 'medium', timeStyle: 'short' });
+        dates = `${format.format(new Date(candidate.start))} to ${format.format(new Date(candidate.end))} (${candidate.timezone || 'UTC'}).`;
+      }
+    }
+    $('#import-preview').textContent = `${candidate.title || 'Untitled event'}. ${dates}`;
+    const warnings = [...new Set([...importState.warnings, ...(candidate.warnings || [])])];
+    $('#import-warnings').replaceChildren(...warnings.slice(0, 20).map(text => node('li', '', text)));
+  }
+  async function loadCalendarFile() {
+    const generation = ++importState.generation;
+    importState.candidates = []; importState.warnings = [];
+    const select = $('#import-candidate-select'); select.replaceChildren(); select.disabled = true;
+    $('#import-review-button').disabled = true; $('#import-preview').textContent = ''; $('#import-warnings').replaceChildren();
+    const file = $('#calendar-file').files[0];
+    if (!file) { $('#import-status').textContent = 'Choose a calendar file to get started.'; return; }
+    $('#import-status').textContent = 'Reading calendar on this device…';
+    try {
+      if (!/\.ics$/i.test(file.name)) throw new Error('Choose an .ics calendar file.');
+      if (file.size > 512 * 1024) throw new Error('Choose a calendar file no larger than 512 KB.');
+      const text = await file.text();
+      if (generation !== importState.generation) return;
+      const result = RadarCalendarImport.parse(text);
+      importState.candidates = result.candidates; importState.warnings = result.warnings;
+      select.replaceChildren(...result.candidates.map((candidate, index) => new Option(candidate.title || 'Untitled event — add details', String(index))));
+      select.disabled = !result.candidates.length;
+      $('#import-status').textContent = result.candidates.length ? `${result.candidates.length} event${result.candidates.length === 1 ? '' : 's'} ready for review. Nothing has been saved.${result.skipped ? ` ${result.skipped} calendar entries skipped.` : ''}` : `No supported events found.${result.skipped ? ` ${result.skipped} entries skipped.` : ''}`;
+      if (!result.candidates.length) $('#import-warnings').replaceChildren(...result.warnings.slice(0, 20).map(text => node('li', '', text)));
+      updateImportPreview();
+    } catch (error) { if (generation === importState.generation) $('#import-status').textContent = error.message || 'This calendar could not be read. Choose another .ics file.'; }
+  }
+  async function reviewCalendarEvent() {
+    const candidate = importState.candidates[Number($('#import-candidate-select').value)];
+    if (!candidate) return;
+    const button = $('#import-review-button'); button.disabled = true;
+    try {
+      const identity = candidate.uid || JSON.stringify([candidate.title, candidate.start, candidate.end, candidate.url]);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity));
+      const tag = 'calendar:' + [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      hydrate(await readStorage());
+      const existing = state.saved.find(event => event.id.startsWith('custom-') && (event.tags.includes(tag) || candidate.uid === event.id + '-event@cseradar.local'));
+      $('#import-dialog').close();
+      reviewCandidate(candidate, { existing, tags: ['calendar import', tag], heading: existing ? 'Review calendar update' : 'Review imported event', warnings: importState.warnings });
+    } finally { button.disabled = false; }
   }
   function openSettings() {
     $('#timezone-select').value = state.zone;
@@ -505,6 +582,7 @@
     else $('#source-list').append(node('p', 'load-error', 'The source directory could not load. Please reopen CSE Radar.'));
     if (state.sources.length) renderSources();
     route(location.hash.slice(1));
+    $$('[data-category]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.category === state.category)));
     $$('[data-route]').forEach(button => button.addEventListener('click', () => { location.hash = button.dataset.route; route(button.dataset.route); }));
     window.addEventListener('hashchange', () => route(location.hash.slice(1)));
     $$('[data-category]').forEach(button => button.addEventListener('click', () => {
@@ -526,6 +604,11 @@
     $('#calendar-today').addEventListener('click', () => { state.month = todayKey().slice(0, 7); state.day = todayKey(); render(); });
     $('#export-saved').addEventListener('click', () => run(() => downloadCalendar(state.saved.map(e => getEvent(e.id) || e))));
     $('#add-open').addEventListener('click', () => run(() => openEventForm()));
+    $('#import-open').addEventListener('click', () => $('#import-dialog').showModal());
+    $('#calendar-file').addEventListener('change', () => run(loadCalendarFile));
+    $('#calendar-import-form').addEventListener('submit', event => event.preventDefault());
+    $('#import-candidate-select').addEventListener('change', updateImportPreview);
+    $('#import-review-button').addEventListener('click', () => run(reviewCalendarEvent));
     $('#all-day-toggle').addEventListener('change', event => setDateMode(event.target.checked));
     $('#add-form').elements.namedItem('timezone').addEventListener('input', updateInputZone);
     $('#settings-open').addEventListener('click', openSettings);

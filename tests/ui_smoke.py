@@ -142,7 +142,7 @@ async def exercise(endpoint, base_url):
         """)
         await cdp.wait("!document.querySelector('#add-dialog').open")
         assert await cdp.evaluate("document.querySelector('#saved-count').textContent") == '2'
-        assert await cdp.evaluate("document.querySelectorAll('script').length") == 4
+        assert await cdp.evaluate("document.querySelectorAll('script').length") == 5
         await cdp.evaluate("document.querySelector('#settings-open').click(); document.querySelector('#reminder-select').value='0'; document.querySelector('#timezone-select').value='UTC'; document.querySelector('#settings-form').requestSubmit()")
         await cdp.wait("!document.querySelector('#settings-dialog').open")
         assert await cdp.evaluate("JSON.parse(localStorage.getItem('cse-radar-preview')).radarReminderHours") == 0

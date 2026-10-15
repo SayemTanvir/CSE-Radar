@@ -6,7 +6,7 @@ CSE Radar is a browser extension for discovering CSE opportunities in Bangladesh
 
 ## Current scope
 
-Version 0.3 includes a **reviewed event catalog with optional updates**, reviewed capture from the current event page, editable personal events, and free-entry and registration-deadline filters. Enable **Preferences → Enable event updates** to download new catalog editions from this repository without reinstalling. The extension checks every six hours while the browser runs; **Refresh events** checks immediately. Updates are off by default. The bundled catalog and last valid download remain available offline.
+Version 0.4 includes a **reviewed event catalog with optional updates**, reviewed capture from the current event page, local calendar import, editable personal events, and free-entry and registration-deadline filters. Enable **Preferences → Enable event updates** to download new catalog editions from this repository without reinstalling. The extension checks every six hours while the browser runs; **Refresh events** checks immediately. Updates are off by default. The bundled catalog and last valid download remain available offline.
 
 The discovery workflow collects public event leads from MLH, itch.io, BUET CSE announcements, and EventifyBD. Leads require review before appearing in the extension. This does not provide exhaustive or automatically verified coverage. Check each event's official source before registering or travelling; dates, eligibility, fees, and availability can change after the event's own verification date. A recent download does not mean that every event was recently verified. Events with unannounced dates are leads, not confirmed calendar appointments.
 
@@ -35,7 +35,7 @@ The build creates `dist/chromium` and `dist/firefox`. Run it again after source 
 
 After changing extension files, click **Reload** on the extensions page and refresh the dashboard. See [Chrome's official development installation guide](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked).
 
-If upgrading to 0.3, reload the extension once to install the toolbar popup and current-page capture permissions. Existing saved events and preferences remain local. Later catalog changes need no extension reload.
+Reload after upgrading to install the new interface. Upgrading from versions before 0.3 also installs the toolbar popup and current-page capture permissions. Calendar import adds no permissions. Existing saved events and preferences remain local. Later catalog changes need no extension reload.
 
 ## Capture and plan a personal event
 
@@ -51,6 +51,14 @@ Times entered in the form use the selected IANA timezone, such as `Asia/Dhaka` o
 Open a saved personal event and choose **Edit personal event** to change its details or mark it cancelled. Editing preserves its identity and reschedules reminders; cancellation removes its pending reminders. Reviewed catalog entries continue to follow catalog updates.
 
 **Free entry only** includes explicit free or zero-price entries; an unknown fee does not count as free. Deadline filters can show known future cutoffs, cutoffs within 7 or 30 days, or exclude known closed registrations. Missing deadlines remain visible in the last option and do not count as confirmed open registration.
+
+## Import an organizer calendar
+
+Click **Import calendar**, choose a local `.ics` file, select an event, and click **Review event**. Confirm the official HTTPS link, organizer, category, format, eligibility, and timezone before saving. Files are limited to 512 KiB and the first 50 supported event candidates. Import reviews one event at a time; it does not add events automatically or upload the file.
+
+UTC and named IANA timezone dates are supported. All-day calendar end dates are converted to the inclusive last day shown in the form. Floating times without a timezone, unsupported custom timezone definitions, ambiguous daylight-saving times, and missing end times need manual correction. Recurring schedules are skipped with an explanation rather than expanded into potentially incorrect appointments. Attachments and embedded alarms are ignored, and links are never fetched during import. Radar schedules its own reminders only after you save.
+
+Re-importing an event with the same calendar UID opens a review of the existing personal event. Saving updates that event and its reminders without creating another copy. Without a UID, matching uses the original title, dates, and URL; changes to those fields can require you to identify an existing entry manually. Saved catalog events are not overwritten by file imports. CSE Radar exports can restore their matching exact registration-deadline entries; generic calendars do not imply registration cutoffs from their event dates or alarms.
 
 ### Firefox
 
@@ -73,6 +81,7 @@ Phone installation is a separate compatibility issue: [Chrome's mobile browser c
 - The extension does not monitor visited websites or send saved event data to a server. Current-page capture requires an explicit toolbar action.
 - The extension requests storage, alarm, and notification permissions to save preferences and deliver reminders. `activeTab` and `scripting` allow user-triggered capture on the current page without permanent access to every website.
 - Capture drafts stay in local extension storage, with at most ten drafts retained. They expire after 24 hours and are pruned on subsequent draft operations or browser startup. Saving deletes the matching draft; a draft alone never schedules reminders.
+- Calendar file previews stay in the open dashboard's memory. Only the event you review and save is stored; the file is not uploaded. A hash of its event UID supports identifying later imports.
 - Catalog updates request optional access to `raw.githubusercontent.com` when you enable them. Requests download only the fixed public catalog URL with no cookies, saved events, or personal preferences attached. GitHub receives normal request metadata such as your IP address. No catalog request is made before opt-in.
 - Turning updates off stops further requests and removes the optional access grant; downloaded events remain on the device. Permission revocation also disables updates.
 - Entire downloads are validated before replacement. Invalid, oversized, timed-out, or older catalogs leave the last valid cache intact. A download cannot overwrite personal entries or roll back the catalog bundled with the current extension.
@@ -84,6 +93,7 @@ Phone installation is a separate compatibility issue: [Chrome's mobile browser c
 | `dashboard.html`, `dashboard.js`, `style.css`, `readability.css` | Event discovery, calendar interface, larger typography and touch layouts. |
 | `core.js` | Shared event validation, safe hyperlinks, calendar export, and reminder planning. |
 | `planning.js` | Explicit free-entry matching, deadline filters, and timezone-aware personal-event date conversion. |
+| `calendar-import.js` | Bounded local iCalendar parsing, timezone handling, and review candidates. |
 | `popup.html`, `popup.js`, `popup.css`, `capture.js` | Toolbar capture of published event metadata, candidate selection, and mandatory draft review. |
 | `feed.js` | Permission-gated catalog downloads, validation, cache fallback, and saved-event reconciliation. |
 | `background.js` | Catalog refresh scheduling, serialized saved-event mutations, and browser reminders. |
@@ -101,7 +111,7 @@ Firefox's generated manifest uses background scripts instead of Chromium's servi
 With Node.js installed, run:
 
 ```sh
-node --test tests/core.test.js tests/feed.test.js tests/catalog_data.test.js tests/planning.test.js tests/capture.test.js
+node --test tests/core.test.js tests/feed.test.js tests/catalog_data.test.js tests/planning.test.js tests/capture.test.js tests/calendar_import.test.js
 python -m unittest discover -s tests -p test_collection.py
 ```
 
@@ -115,6 +125,7 @@ python tests/extension_smoke.py
 python tests/catalog_smoke.py
 python tests/responsive_smoke.py
 python tests/capture_smoke.py
+python tests/import_smoke.py
 ```
 
 The UI check covers search, region filters, event links, saved-event persistence, custom form validation, all-day timezone behavior, preferences, combined calendar export, source listings, and narrow-screen layout. It saves preview images in `artifacts/`. The extension check loads `dist/chromium` into a recent Chrome via its experimental extension debugging API and verifies its actual service worker and reminder alarms. It does not display a system notification. Set `RADAR_TEST_BROWSER` if Chrome is installed elsewhere. The default test browser path is for Windows.
@@ -127,6 +138,8 @@ Both browser checks passed in Chrome and desktop Brave, along with the core/back
 
 The capture integration check uses Brave's real toolbar action and `activeTab` grant with a local event fixture, without adding host permissions or simulating the capture API. It verifies explicit capture, unsaved draft review, exclusion of private form values, required-field completion, saving, personal edits and reminder replacement, planning filters, and draft expiry. Date-only coverage verifies inclusive review and editing, exclusive stored end dates, actual all-day calendar downloads, and no invented registration cutoff. This checks structured event fixtures rather than claiming successful extraction from every live event website.
 
+The calendar import check passed in Chrome and Brave using a real local file input and extension storage. It verifies no automatic saves or import network requests, date-only and named-timezone review, duplicate updates, reminder scheduling, a 320px dialog layout, accessible dialog names, calendar keyboard focus, and filter pressed states. Parser checks include folded Unicode text, safe URLs, malformed/oversized files, recurrence handling, and distinct long UIDs.
+
 To repeat the tests in Brave from PowerShell:
 
 ```powershell
@@ -136,6 +149,7 @@ python tests/ui_smoke.py
 python tests/catalog_smoke.py
 python tests/responsive_smoke.py
 python tests/capture_smoke.py
+python tests/import_smoke.py
 ```
 
 To preview the interface without installing the extension, run `python -m http.server 8000 --bind 127.0.0.1` in the project directory and open `http://127.0.0.1:8000/dashboard.html`. This preview uses separate local browser storage and cannot deliver extension reminders. Opening the HTML directly as a file will not reliably load its JSON catalog.
