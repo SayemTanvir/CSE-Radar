@@ -12,11 +12,11 @@ Support is provided through the project issue tracker; no response-time commitme
 
 ## Installation and updates
 
-For development installations, extract the archive. In Chrome, Brave, or Edge, enable Developer mode on the extensions page, choose **Load unpacked**, and select the Chromium build folder containing `manifest.json`. In Firefox 140 or later, open `about:debugging`, choose **This Firefox → Load Temporary Add-on**, and select the Firefox build's manifest. The Chromium manifest cannot substitute for the Firefox build.
+Download a named browser-specific ZIP from [GitHub Releases](https://github.com/SayemTanvir/CSE-Radar/releases) and extract it. In Chrome, Brave, or Edge, enable Developer mode on the extensions page, choose **Load unpacked**, and select the Chromium build folder containing `manifest.json`. Keep that folder in a permanent location. In Firefox 140 or later, open `about:debugging`, choose **This Firefox → Load Temporary Add-on**, and select the Firefox build's manifest. The Chromium manifest cannot substitute for the Firefox build.
 
 A temporary Firefox installation is removed when Firefox restarts. The unsigned development archive is not a permanently installed, signed Firefox release. Store installation instructions and links should be used only once the corresponding listing exists.
 
-After updating unpacked source files, reload the extension from the extensions page and reopen the dashboard. Reload installs application changes; optional catalog refresh updates event data. They are separate operations.
+Follow the README's manual update instructions: keep the same Chromium installation folder and browser profile, replace its files, then reload the existing extension and reopen the dashboard. Uninstalling or loading a new copy from a different path can remove local data or create a separate identity. Reload installs application changes; optional catalog refresh updates event data. They are separate operations. Calendar export preserves supported event dates, not a complete backup of preferences or every field.
 
 ## Reminders do not appear
 

@@ -24,7 +24,13 @@ This checklist records gates; completed evidence is linked in [release verificat
 - [x] Make the policy and support documents publicly reachable at their final HTTPS URLs. Check while signed out. A local file or unpushed candidate URL does not satisfy this gate.
 - [x] Confirm public issue reporting is enabled and the support link works; clearly identify it as public. Do not invent a support email or a private reporting channel.
 
-## Owner/account steps — not completed by preparing files
+## Distribution choice
+
+On October 15, 2026, the owner chose a GitHub ZIP release and explicitly authorized publishing it after the README update. Browser-store submissions are outside this release. The Chromium ZIP supports manual persistent installation in Chrome, Brave, and Edge; the unsigned Firefox ZIP is a temporary developer build removed on restart. See [release notes](RELEASE-NOTES-1.0.0.md) and the README for installation and manual application updates.
+
+The following store-account steps apply only if a store channel is added later; they are not prerequisites for the authorized GitHub release. Signing remains necessary before claiming permanent normal-Firefox installation. A LinkedIn caption is prepared for the owner to post; no social posting is authorized by that request.
+
+## Optional future store-account steps
 
 - [ ] Owner signs in to the Chrome Web Store developer account, completes required registration/verification and genuine contact details, and chooses distribution/availability. Do not place credentials in the repository.
 - [ ] Owner signs in to Microsoft Partner Center and completes required account identity/contact and extension properties.

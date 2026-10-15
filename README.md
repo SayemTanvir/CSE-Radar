@@ -1,122 +1,149 @@
 # CSE Radar
 
-Find your next tech event. Never miss registration.
+**Discover technology events. Plan your participation. Keep track of registration deadlines.**
 
-CSE Radar is a browser extension for discovering CSE opportunities in Bangladesh and around the world: hackathons, game jams, programming contests, university tech fests, and other technology events. It brings event details, official hyperlinks, registration deadlines, and calendar planning together.
+CSE Radar is a free, open-source desktop browser extension for students and developers looking for hackathons, game jams, programming contests, university tech fests, workshops, and conferences in Bangladesh and around the world. Find opportunities, follow organizer links, and build a personal event calendar in your browser.
 
-Desktop release scope: **Chrome, Brave, Microsoft Edge, and Firefox**. See [release verification](docs/RELEASE-VERIFICATION.md), [privacy](docs/PRIVACY.md), [support](docs/SUPPORT.md), and [store submission materials](docs/STORE-LISTING.md). Source code is available under the [MIT license](LICENSE). Browser-store review and signing are separate from completing and testing the application; no store availability is claimed until a listing is live.
+[Download v1.0.0](https://github.com/SayemTanvir/CSE-Radar/releases/tag/v1.0.0) · [Installation](#installation) · [Privacy](docs/PRIVACY.md) · [Report an issue](https://github.com/SayemTanvir/CSE-Radar/issues) · [MIT license](LICENSE)
 
-## Current scope
+![CSE Radar event discovery dashboard](store-assets/screenshots/01-discover.png)
 
-Version 1.0 includes a **reviewed event catalog with optional updates**, reviewed capture from the current event page, local calendar import, editable personal events, and topic, free-entry and registration-deadline filters. Enable **Preferences → Enable event updates** to download new catalog editions from this repository without reinstalling. The extension checks every six hours while the browser runs; **Refresh events** checks immediately. Updates are off by default. The bundled catalog and last valid download remain available offline.
+## What you can do
 
-The discovery workflow collects public event leads from MLH, itch.io, BUET CSE announcements, DIU Student Hub, and EventifyBD. Leads require review before appearing in the extension. The October 15 catalog contains 19 entries, including 17 with confirmed dates and two awaiting dates. This does not provide exhaustive or automatically verified coverage. Check each event's official source before registering or travelling; dates, eligibility, fees, and availability can change after the event's own verification date. A recent download does not mean that every event was recently verified. Events with unannounced dates are leads, not confirmed calendar appointments.
+| Feature | How it helps |
+| --- | --- |
+| Discover relevant events | Search a reviewed catalog and filter by topic, region, format, category, explicit free entry, and known registration deadlines. |
+| Plan in a calendar | Save opportunities, inspect event details, and open official event, source, and registration links. |
+| Receive reminders | Schedule browser notifications for saved events and verified registration cutoffs; send a test notification from Preferences. |
+| Capture an event page | Use **Save this page** to prepare a draft from published page metadata, then review and complete it before saving. |
+| Manage personal events | Add, edit, or cancel your own events with timezone-aware dates, topics, and links. |
+| Import and export calendars | Review events from a local `.ics` file or export dates and known deadlines to another calendar application. |
+| Refresh the public catalog | Opt in to catalog downloads from this repository, with the last valid catalog available offline. |
 
-Saved events, custom events, and preferences stay in the browser's local extension storage. There is no account or cloud synchronization of personal data. Reviewed date changes and cancellations update matching saved events and their reminders; personal events are preserved. Removed listings remain saved until you remove them. Calendar exports create `.ics` files containing event dates, known registration deadlines, and official hyperlinks. Previously exported files or imported calendar entries do not update automatically; export again after a schedule change.
+No account, subscription, or API key is required. Saved events and preferences are stored locally in the browser. There are no ads or analytics.
 
-Browser reminders require the browser to be running and notifications to be allowed by the browser and operating system. Suspended devices can delay reminders. Use calendar export if you want your calendar provider to manage notifications independently of the extension.
+See the [calendar](store-assets/screenshots/02-calendar.png) and [event details](store-assets/screenshots/03-event-details.png) screenshots for more of the interface.
 
-Use **Preferences → Send test notification** to check your setup. A success message means the browser accepted the request; system settings can still hide its popup. Large calendars schedule the earliest 490 pending reminders, then automatically refill the queue as reminders are delivered. Existing alarms keep their schedule during unrelated updates, and cancellations or edited times remove obsolete alarms.
+## Browser compatibility
 
-Some organizers publish only event dates. These entries are shown and exported as all-day events, without claiming an exact start time. Their reminders use the beginning of the listed date in the source timezone as a planning reference (UTC for the initial date-only entries); check the organizer's schedule for actual attendance times. Registration deadlines are scheduled only when a verified deadline is available.
+| Desktop browser | Package | Installation in this release |
+| --- | --- | --- |
+| Google Chrome | Chromium ZIP | Manual, unpacked installation; remains installed after restart. |
+| Brave | Chromium ZIP | Manual, unpacked installation; remains installed after restart. |
+| Microsoft Edge | Chromium ZIP | Manual, unpacked installation; remains installed after restart. |
+| Firefox 140+ | Firefox ZIP | **Temporary developer installation only; removed when Firefox restarts.** |
 
-## Install for development
+**Distribution:** GitHub release downloads. No browser-store listing is required for the Chromium instructions below. The Firefox ZIP is unsigned: normal Firefox requires Mozilla signing for permanent installation. A ZIP file is an extension archive, not a double-click setup program. See Mozilla's [temporary installation](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/) and [signing requirements](https://extensionworkshop.com/documentation/publish/signing-and-distribution-overview/).
 
-The extension uses plain HTML, CSS, and JavaScript; no npm dependencies are needed. Python 3 is needed only to create browser-specific build folders:
+Release testing used actual Chrome, Brave, Edge, and Firefox on Windows 11. This does not establish testing on every operating system. Safari and mobile browsers are outside this release's supported scope; a responsive dashboard alone does not provide phone extension support. Browser versions and evidence are in [release verification](docs/RELEASE-VERIFICATION.md).
+
+## Installation
+
+### Chrome, Brave, and Microsoft Edge
+
+You do not need Git, Node.js, Python, or a developer account to install the release ZIP.
+
+1. Open [CSE Radar v1.0.0](https://github.com/SayemTanvir/CSE-Radar/releases/tag/v1.0.0) and expand **Assets**.
+2. Download **`cse-radar-1.0.0-chromium.zip`**. Choose this named asset rather than GitHub's automatically generated **Source code** archives.
+3. Extract the ZIP into a permanent folder, such as `Documents/CSE-Radar`. On Windows, right-click the ZIP and choose **Extract All**. Keep the extracted folder after installation; the browser loads the extension from it.
+4. Enter the appropriate address in your browser's address bar:
+
+   | Browser | Extensions page |
+   | --- | --- |
+   | Chrome | `chrome://extensions` |
+   | Brave | `brave://extensions` |
+   | Edge | `edge://extensions` |
+
+5. Turn on **Developer mode** and choose **Load unpacked**.
+6. Select the extracted folder that directly contains **`manifest.json`**. Select the folder, not the ZIP or an outer folder containing another folder.
+7. Open the browser's extensions menu, pin **CSE Radar** if desired, and click its icon.
+8. Choose **Open Radar calendar** to start exploring.
+
+The browser must allow developer extensions. On a managed school or work device, administrator policy may prevent this installation. Google's [unpacked installation guide](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked) describes the underlying Chrome workflow.
+
+### Firefox: temporary installation
+
+Use Firefox 140 or later. This path is for trying the current unsigned build, and must be repeated after restarting Firefox.
+
+1. From the [release assets](https://github.com/SayemTanvir/CSE-Radar/releases/tag/v1.0.0), download **`cse-radar-1.0.0-firefox.zip`** and extract it into its own folder.
+2. Enter **`about:debugging#/runtime/this-firefox`** in Firefox's address bar.
+3. Choose **Load Temporary Add-on**.
+4. Select **`manifest.json`** inside the extracted Firefox folder.
+5. Click the CSE Radar toolbar icon, then **Open Radar calendar**.
+
+Use the Firefox package, not the Chromium package. Firefox removes temporary add-ons when it restarts, and temporary-installation storage should be treated as disposable. Export any event dates you want to keep before restarting. This release does not provide a signed, permanent Firefox installer; renaming the unsigned ZIP to `.xpi` does not sign it.
+
+### First-time setup
+
+1. Open **Preferences**, choose your display timezone and reminder lead time, then click **Save preferences**.
+2. Reopen **Preferences**, choose **Send test notification**, and allow browser/operating-system notifications if prompted. An accepted request does not guarantee a visible popup when system notifications are suppressed.
+3. Optionally enable **Enable event updates**, approve the GitHub host permission, and choose **Refresh events**. Updates are off by default; the bundled catalog works without enabling them.
+4. Save an event and open **My calendar** to view it.
+
+## Everyday use
+
+- **Discover and verify:** filter opportunities, open an event, and check its organizer link, dates, eligibility, fees, and registration availability before committing. Unknown fees do not count as free, and a missing deadline does not prove registration is open.
+- **Capture a webpage:** open an ordinary event page, click the toolbar's **Save this page**, choose a candidate if offered, and click **Review in Radar**. Complete missing details before saving. Capture reads published metadata, not posters or private form fields, and does not save automatically.
+- **Add your own event:** choose **Add an event**, enter the event's timezone and details, then save. For **Dates only**, enter the first and last event days inclusively. Use **Edit personal event** later to update details or cancel reminders.
+- **Import a calendar:** choose **Import calendar**, select a local `.ics` file, and review one event at a time. The file stays on your device. Imports accept up to 512 KiB and 50 supported candidates; recurring schedules are skipped, and incomplete or ambiguous times need correction. Re-importing a matching UID reviews an update instead of automatically duplicating it.
+- **Export dates:** export an `.ics` file and import it into your preferred calendar application. Exports contain supported event dates and known deadlines, not a full backup of preferences, drafts, or every stored field. Existing exports do not automatically follow later changes.
+
+## Reminders and updates
+
+**Reminders require the browser to be running**, the extension to be enabled, and browser/OS notifications to be allowed. Device sleep, Do Not Disturb, and browser scheduling can delay or hide notifications. A draft or import preview does not schedule anything; save the event first. Cancelled events and unknown dates do not create reminders. For dates-only events, the start of the listed date is a planning reference, not a verified attendance time. Large calendars schedule the earliest 490 pending reminders and refill the queue as reminders are delivered.
+
+**Catalog updates** refresh event data. When enabled, they check the fixed public GitHub catalog every six hours while the browser runs, or immediately through **Refresh events**. Invalid downloads keep the last valid catalog. Reviewed date changes and cancellations update matching saved catalog events and their reminders; personal events remain separate. Listings removed from the public catalog remain saved until you remove them.
+
+**Extension updates** install application changes. GitHub ZIP installations do not automatically update the application:
+
+1. Export event dates you want to keep. Calendar export is not a complete settings backup.
+2. Download the newer Chromium release ZIP and extract it separately.
+3. Close the Radar dashboard and browser, then replace the extension files inside the **same original installation folder**, keeping its path unchanged.
+4. Reopen the browser, visit its extensions page, and choose **Reload** on the existing CSE Radar card. Reopen the dashboard and confirm the version and saved events.
+
+Keep the same browser profile and original folder. Avoid uninstalling the extension or loading another copy from a different path: those actions can remove local data or create a separate extension identity. Firefox's current temporary build must instead be loaded again through `about:debugging`.
+
+## Event coverage and sources
+
+The catalog is selective and reviewed. The October 15, 2026 edition contains **19 entries: 17 with confirmed dates and two awaiting dates**. Awaiting dates are not invented calendar appointments. A recent download does not mean every event was recently verified; check each entry's source and **Last checked** date.
+
+The maintenance workflow collects public leads from:
+
+| Source | Coverage |
+| --- | --- |
+| [Major League Hacking](https://mlh.io/seasons/2027/events) | Student hackathons and linked organizer pages. |
+| [itch.io jams](https://itch.io/jams) | Game jams and published schedules. |
+| [BUET CSE announcements](https://cse.buet.ac.bd/home/all_news) | Bangladesh university technology opportunities. |
+| [DIU Student Hub](https://studentshub.daffodilvarsity.edu.bd/events) | University listings filtered for relevant future events. |
+| [EventifyBD](https://eventifybd.com/) | Bangladesh event leads requiring organizer verification. |
+
+Reviewed entries also cite organizers directly, including NASA Space Apps, ICPC, Junction, and other event organizers. These citations do not mean every organizer has an automatic collection adapter or an affiliation with CSE Radar.
+
+Daily collection produces **unreviewed leads**, not automatic catalog additions. A maintainer checks relevance, sources, dates, fees, eligibility, and known cutoffs before publication. Private groups, image-only announcements, and inaccessible sources may not be covered. To suggest an opportunity, use **Event sources → Suggest an event** or [open an issue](https://github.com/SayemTanvir/CSE-Radar/issues); suggestions are public and require review.
+
+## Privacy and permissions
+
+- Saved events and preferences stay in local browser extension storage; there is no personal-calendar cloud synchronization.
+- `storage`, `alarms`, and `notifications` support local planning and reminders. `activeTab` and `scripting` support capture after **Save this page**, without permanent access to every website.
+- Capture drafts are limited to ten and expire after 24 hours; physical cleanup runs when browser execution permits. Calendar import previews stay in the dashboard's memory until an event is reviewed and saved.
+- Optional updates request access to `raw.githubusercontent.com` to download one fixed public catalog. Saved events, searches, captured pages, and preferences are not sent with that request. GitHub receives ordinary connection metadata such as your IP address.
+- Disabling updates stops requests and removes the optional host permission. Uninstalling removes extension-managed local data; exported files and external calendar entries remain wherever you saved them.
+
+Read the [privacy policy](docs/PRIVACY.md) for storage, captured URLs, retention, external services, and sharing details. GitHub issues are public; do not post private calendars, invitation tokens, or unredacted personal information.
+
+## Development
+
+The runtime uses plain HTML, CSS, JavaScript, and WebExtension APIs. There are no npm runtime dependencies or transpilation steps. Python 3 builds the release archives; Node.js runs the JavaScript checks.
 
 ```sh
+git clone https://github.com/SayemTanvir/CSE-Radar.git
+cd CSE-Radar
 python scripts/package.py
 ```
 
-The build creates `dist/chromium` and `dist/firefox`, versioned ZIP archives, and `SHA256SUMS-1.0.0.txt` in `dist/`. Run it again after source changes to update them. Archives contain runtime files and the MIT license, with the browser-specific manifest at the root. Extra repository/test/discovery files are excluded. Packaging checks verify this boundary and repeatable archive hashes. The Firefox archive is unsigned until Mozilla signs it; these packages have not yet been published to a browser store.
+The build creates `dist/chromium`, `dist/firefox`, versioned ZIP archives, and a SHA-256 checksum file. Load the generated build using the installation steps above. Packaging uses a runtime-file allowlist; tests, browser profiles, and discovery artifacts are excluded. Firefox uses background scripts, while Chromium uses a service worker.
 
-GitHub Actions also packages both archives after successful checks. Open a successful **Catalog checks and discovery** run and download its **cse-radar-development-builds** artifact, retained for 14 days. Extract the Chromium ZIP before using **Load unpacked**. A GitHub sign-in may be needed to download workflow artifacts.
-
-### Chrome, Edge, Brave, and other Chromium browsers
-
-1. Open the browser's extensions page: `chrome://extensions`, `edge://extensions`, or `brave://extensions`.
-2. Enable **Developer mode**.
-3. Click **Load unpacked** and select this project's root directory, or the generated `dist/chromium` directory.
-4. Click the CSE Radar extension icon, then **Open Radar calendar** to open its dashboard.
-
-After changing extension files, click **Reload** on the extensions page and refresh the dashboard. See [Chrome's official development installation guide](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked).
-
-Reload after upgrading to install the new interface. Upgrading from versions before 0.3 also installs the toolbar popup and current-page capture permissions. Calendar import adds no permissions. Existing saved events and preferences remain local. Later catalog changes need no extension reload.
-
-## Capture and plan a personal event
-
-1. Open an event website and click the CSE Radar toolbar icon.
-2. Click **Save this page**. Capture runs only after this click; opening the popup does not read the page.
-3. If the page contains multiple structured events, choose the event you want. Click **Review in Radar**.
-4. Review the organizer, official link, category, location, fee, dates, and event timezone. Complete any missing details, then save the event.
-
-Capture reads published JSON-LD event data, page title, and metadata. Pages without structured event data provide a partial draft for manual completion. It does not read input fields, private form values, or the full page body. Extracted details still need your review; the extension does not infer missing start times or registration deadlines. Unsupported browser pages can be added manually from **Add an event**.
-
-Times entered in the form use the selected IANA timezone, such as `Asia/Dhaka` or `UTC`, independently of your computer's timezone. For date-only events, choose **Dates only** and enter the first and last event days inclusively. Calendar export stores the last day as the exclusive next-day boundary required by `.ics`. A date-only registration cutoff is left blank until you confirm its exact time with the organizer. Date-only event reminders use midnight in the selected timezone as a planning reference.
-
-Open a saved personal event and choose **Edit personal event** to change its details or mark it cancelled. Editing preserves its identity and reschedules reminders; cancellation removes its pending reminders. Reviewed catalog entries continue to follow catalog updates.
-
-**Free entry only** includes explicit free or zero-price entries; an unknown fee does not count as free. Deadline filters can show known future cutoffs, cutoffs within 7 or 30 days, or exclude known closed registrations. Missing deadlines remain visible in the last option and do not count as confirmed open registration.
-
-**Any topic or skill** filters the explicit keywords attached to events, such as open source, Unity or algorithms. It combines with search, region, format and deadline filters. Add comma-separated **Topics** to your personal events and edit them later; import identity labels remain hidden. The menu shows up to 60 common topics, retaining the selected topic when a filter or catalog change leaves no matches. Reset filters clears the topic selection too.
-
-## Import an organizer calendar
-
-Click **Import calendar**, choose a local `.ics` file, select an event, and click **Review event**. Confirm the official HTTPS link, organizer, category, format, eligibility, and timezone before saving. Files are limited to 512 KiB and the first 50 supported event candidates. Import reviews one event at a time; it does not add events automatically or upload the file.
-
-UTC and named IANA timezone dates are supported. All-day calendar end dates are converted to the inclusive last day shown in the form. Floating times without a timezone, unsupported custom timezone definitions, ambiguous daylight-saving times, and missing end times need manual correction. Recurring schedules are skipped with an explanation rather than expanded into potentially incorrect appointments. Attachments and embedded alarms are ignored, and links are never fetched during import. Radar schedules its own reminders only after you save.
-
-Re-importing an event with the same calendar UID opens a review of the existing personal event. Saving updates that event and its reminders without creating another copy. Without a UID, matching uses the original title, dates, and URL; changes to those fields can require you to identify an existing entry manually. Saved catalog events are not overwritten by file imports. CSE Radar exports can restore their matching exact registration-deadline entries; generic calendars do not imply registration cutoffs from their event dates or alarms.
-
-### Firefox
-
-Use Firefox 140 or later and the Firefox build rather than loading the Chromium manifest directly. Open `about:debugging`, choose **This Firefox**, click **Load Temporary Add-on**, and select `manifest.json` in `dist/firefox`. Temporary installations are removed when Firefox restarts. See [Firefox's temporary installation guide](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/).
-
-### Safari and mobile
-
-A Safari package is not shipped in this version. Safari needs a separate Apple-platform packaging and testing workflow; see [Apple's Safari extensions documentation](https://developer.apple.com/safari/extensions/). Mobile compatibility is not promised. The initial target is major desktop Chromium browsers and Firefox.
-
-Version 0.2.1 improves readability with 20px bold event titles, 14–16px event text, 16px form inputs, and larger touch controls. The phone layout has two-column navigation and statistics, a top Preferences button, horizontally scrollable category filters, stacked event details, and a compact header. Browser zoom remains available.
-
-The responsive interface is checked with touch emulation at 320, 360, 390, 430, 768, 1024, and 1440 CSS pixels, including dialog scrolling, calendar controls, saved events, and form access. These are desktop-browser emulation checks, not tests on physical phones. The standalone browser preview has no extension reminder service.
-
-Phone installation is a separate compatibility issue: [Chrome's mobile browser cannot install desktop extensions](https://support.google.com/chrome_webstore/answer/1698338?hl=en), and [Brave's mobile versions do not support these extensions](https://community.brave.com/t/does-brave-browser-for-android-support-extensions/541316). [Firefox for Android supports extensions](https://support.mozilla.org/en-US/kb/find-and-install-add-ons-firefox-android), but this project has not been packaged, distributed, or tested for Android. A hosted mobile web application would need a separate publishing and reminder strategy.
-
-## Data and privacy
-
-- Official organizer URLs are shown with event details; the catalog's source notes explain the verification basis.
-- User-created events are local entries and are not submitted to a public catalog.
-- The extension does not monitor visited websites or send saved event data to a server. Current-page capture requires an explicit toolbar action.
-- The extension requests storage, alarm, and notification permissions to save preferences and deliver reminders. `activeTab` and `scripting` allow user-triggered capture on the current page without permanent access to every website.
-- Capture drafts stay in local extension storage, with at most ten drafts retained. They expire after 24 hours and are pruned on subsequent draft operations or browser startup. Saving deletes the matching draft; a draft alone never schedules reminders.
-- Calendar file previews stay in the open dashboard's memory. Only the event you review and save is stored; the file is not uploaded. A hash of its event UID supports identifying later imports.
-- Catalog updates request optional access to `raw.githubusercontent.com` when you enable them. Requests download only the fixed public catalog URL with no cookies, saved events, or personal preferences attached. GitHub receives normal request metadata such as your IP address. No catalog request is made before opt-in.
-- Turning updates off stops further requests and removes the optional access grant; downloaded events remain on the device. Permission revocation also disables updates.
-- Entire downloads are validated before replacement. Invalid, oversized, timed-out, or older catalogs leave the last valid cache intact. A download cannot overwrite personal entries or roll back the catalog bundled with the current extension.
-
-## Project layout
-
-| File | Purpose |
-| --- | --- |
-| `dashboard.html`, `dashboard.js`, `style.css`, `readability.css` | Event discovery, calendar interface, larger typography and touch layouts. |
-| `core.js` | Shared event validation, safe hyperlinks, calendar export, and reminder planning. |
-| `planning.js` | Explicit free-entry matching, deadline filters, and timezone-aware personal-event date conversion. |
-| `calendar-import.js` | Bounded local iCalendar parsing, timezone handling, and review candidates. |
-| `popup.html`, `popup.js`, `popup.css`, `capture.js` | Toolbar capture of published event metadata, candidate selection, and mandatory draft review. |
-| `feed.js` | Permission-gated catalog downloads, validation, cache fallback, and saved-event reconciliation. |
-| `background.js` | Catalog refresh scheduling, serialized saved-event mutations, and browser reminders. |
-| `data/events.json` | Curated catalog with organizer sources and verification dates. |
-| `manifest.json` | Chromium extension configuration and permissions. |
-| `scripts/package.py` | Generates icons and Chromium/Firefox build folders. |
-| `scripts/collect_events.py` | Collects unreviewed event leads and per-source errors without changing the catalog. |
-| `data/collection-sources.json` | Bounded, allowlisted discovery source configuration. |
-| `.github/workflows/catalog.yml` | Catalog checks and scheduled collection artifacts. |
-
-Firefox's generated manifest uses background scripts instead of Chromium's service worker. Calendar exports and notification scheduling share the same event validation logic.
-
-## Checks
-
-With Node.js installed, run:
+Run the core checks:
 
 ```sh
 node --test tests/core.test.js tests/feed.test.js tests/catalog_data.test.js tests/planning.test.js tests/capture.test.js tests/calendar_import.test.js
@@ -124,96 +151,25 @@ python -m unittest discover -s tests -p test_collection.py
 python -m unittest discover -s tests -p test_package.py
 ```
 
-The checks cover event validation, calendar timezone handling, reminder planning and delivery deduplication, feed opt-in, invalid/offline/oversized updates, rollback protection, concurrent saves and refreshes, cancellation propagation, bounded source extraction, capture bounds and draft expiry, explicit free-entry and deadline filters, and daylight-saving ambiguities in personal-event times. Reviewed catalog and source registry checks also run in CI. Browser notification permissions still need manual checking on each operating system.
+Real-browser runners in `tests/` cover discovery, persistence, capture, import/export, reminders, optional feed behavior, and responsive layout in isolated profiles. See [release verification](docs/RELEASE-VERIFICATION.md) for tested versions, manual checks, limitations, and the frozen runtime commit. Source changes run checks and packaging in GitHub Actions; daily discovery artifacts are retained for 14 days and never automatically published.
 
-Automated browser checks are also included. They use isolated headless browser profiles and do not access your normal browser profile. With Python's `websockets` package available, run:
-
-```sh
-python tests/ui_smoke.py
-python tests/extension_smoke.py
-python tests/catalog_smoke.py
-python tests/responsive_smoke.py
-python tests/capture_smoke.py
-python tests/import_smoke.py
-python tests/restart_smoke.py
-```
-
-The UI check covers search, region filters, event links, saved-event persistence, custom form validation, all-day timezone behavior, preferences, combined calendar export, source listings, and narrow-screen layout. It saves preview images in `artifacts/`. The extension check loads `dist/chromium` into a recent Chrome via its experimental extension debugging API and verifies its actual service worker and reminder alarms. It verifies actual test-notification API creation; OS visibility is not visually asserted. Set `RADAR_TEST_BROWSER` if Chrome is installed elsewhere. The default test browser path is for Windows.
-
-The catalog integration check uses actual extension storage, UI, and reminder alarms, with explicitly simulated download responses and granted permission for deterministic tests. It verifies opt-out, caching, offline/invalid fallback, date changes, cancellations, and preservation of personal entries. These fixtures do not represent a live network end-to-end test.
-
-Set `RADAR_TEST_LIVE_FEED=1` to additionally download and validate the real public GitHub feed during the catalog check. That path has also passed in Brave. The permission facade is still simulated, so the browser's interactive permission prompt is not covered.
-
-Chrome and Brave passed the actual extension, UI, toolbar capture and local-calendar-import checks, along with the core/background assertions. Testing covers loading the extension, its service worker, local saved storage, event/deadline reminder alarms, reminders off, and accepted notification creation. OS popup visibility is not visually asserted. Safari is outside this release.
-
-Microsoft Edge 155 passed the same actual extension, UI, toolbar capture and local-calendar-import checks in isolated profiles. Firefox 158 passed a real runtime suite using an official, workspace-only Firefox binary and geckodriver, with the Firefox ZIP temporarily installed rather than a replacement browser API. Checks include genuine toolbar capture, private-form exclusion, required draft review, personal saves/edits, persistence, reminders, actual notification creation, and calendar import/export. Topic checks cover combined filtering, reset, saving and editing personal keywords, and hidden import identity labels.
-
-To repeat Firefox checks, provide official executable paths without changing your normal browser profile:
-
-```powershell
-$env:RADAR_TEST_FIREFOX = 'C:\path\to\firefox.exe'
-$env:RADAR_TEST_GECKODRIVER = 'C:\path\to\geckodriver.exe'
-python scripts/package.py
-python tests/firefox_smoke.py
-```
-
-The Firefox runner uses privileged WebDriver access only to operate its isolated browser's real toolbar and permission dialogs. It does not override extension APIs or grant host permissions through a facade. Headless notification acceptance does not establish visual OS delivery. See the dated evidence and remaining manual/account steps in [release verification](docs/RELEASE-VERIFICATION.md) and the [release checklist](docs/RELEASE-CHECKLIST.md).
-
-The capture integration check uses Brave's real toolbar action and `activeTab` grant with a local event fixture, without adding host permissions or simulating the capture API. It verifies explicit capture, unsaved draft review, exclusion of private form values, required-field completion, saving, personal edits and reminder replacement, planning filters, and draft expiry. Date-only coverage verifies inclusive review and editing, exclusive stored end dates, actual all-day calendar downloads, and no invented registration cutoff. This checks structured event fixtures rather than claiming successful extraction from every live event website.
-
-The calendar import check passed in Chrome and Brave using a real local file input and extension storage. It verifies no automatic saves or import network requests, date-only and named-timezone review, duplicate updates, reminder scheduling, a 320px dialog layout, accessible dialog names, calendar keyboard focus, and filter pressed states. Parser checks include folded Unicode text, safe URLs, malformed/oversized files, recurrence handling, and distinct long UIDs.
-
-To repeat the tests in Brave from PowerShell:
-
-```powershell
-$env:RADAR_TEST_BROWSER = 'C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe'
-python tests/extension_smoke.py
-python tests/ui_smoke.py
-python tests/catalog_smoke.py
-python tests/responsive_smoke.py
-python tests/capture_smoke.py
-python tests/import_smoke.py
-```
-
-To preview the interface without installing the extension, run `python -m http.server 8000 --bind 127.0.0.1` in the project directory and open `http://127.0.0.1:8000/dashboard.html`. This preview uses separate local browser storage and cannot deliver extension reminders. Opening the HTML directly as a file will not reliably load its JSON catalog.
-
-## Event collection and review
-
-The data flow is: **public source listings → daily collection of unreviewed leads → maintainer verification → reviewed `data/events.json` on GitHub → optional extension refresh every six hours**. The browser downloads the reviewed catalog; it does not directly scrape the source websites. Discovery and publication are separate, so the collection schedule does not guarantee that a new event is immediately published.
-
-| Source | Collection purpose |
+| Path | Purpose |
 | --- | --- |
-| [MLH season listing](https://mlh.io/seasons/2027/events) | International hackathon leads from public structured event data. |
-| [itch.io upcoming jams](https://itch.io/jams/upcoming) | Game jam leads from a bounded set of public jam pages. |
-| [BUET CSE announcements](https://cse.buet.ac.bd/home/all_news) | Bangladesh university tech event leads; announcement dates are not treated as event dates. |
-| [DIU Student Hub](https://studentshub.daffodilvarsity.edu.bd/events) | Official university listing cards filtered for future technology events, with date precision and conflicting title years retained for review. |
-| [EventifyBD](https://eventifybd.com/) | Bangladesh technology event leads; aggregator details require organizer verification. |
+| `dashboard.*`, `style.css`, `readability.css` | Discovery, event details, calendar, and responsive interface. |
+| `core.js`, `planning.js`, `calendar-import.js` | Validation, dates, filters, calendar import/export, and reminder planning. |
+| `popup.*`, `capture.js` | Explicit page capture and draft review. |
+| `background.js`, `feed.js` | Local reminders, catalog downloads, and saved-event reconciliation. |
+| `data/` | Reviewed catalog, source directory, and discovery configuration. |
+| `scripts/`, `tests/` | Packaging, lead collection, and verification tooling. |
 
-The EventifyBD adapter reads the anonymous `https://api.eventifybd.com/events` response used by its public calendar. This is a public frontend endpoint, not a documented supported API, and may change. Business-case competitions, unrelated activities, and clearly past listings are excluded. Reported dates and deadlines retain their precision and remain unverified until organizer review; provided external links are not automatically treated as official. Collection notes preserve EventifyBD listing attribution.
+## Contributing and support
 
-The DIU adapter reads one anonymous public listing page without login or registration. It excludes unrelated activities, completed/cancelled entries and past date badges. It preserves dates without guessing a timezone or cutoff from displayed clock text. A title/date year mismatch is marked as a source conflict and requires organizer clarification before publication.
+Bug reports, source corrections, event suggestions, and focused pull requests are welcome. Include a reproducible example, browser/version, extension version, and any relevant public organizer link. Run relevant checks before proposing code changes. See [support](docs/SUPPORT.md) for troubleshooting and reporting guidance.
 
-Reviewed entries also cite organizers directly, including NASA Space Apps, MLH Global Hack Week, IUBAT/ICPC, hackCBS, Junction, and HackTheBurgh. These organizer links are provenance for reviewed entries; they are not all automatic collection adapters. The extension's source directory lists both kinds of source.
+When editing the catalog, verify the official source, keep stable event IDs, preserve unknown cutoffs as unknown, and set each verification date to the day it was actually checked. Keep cancelled entries marked as cancelled so saved reminders can be reconciled. Do not publish collected leads without review.
 
-Run `python scripts/collect_events.py` to write `artifacts/candidates.json` and `artifacts/collection-report.json`. The collector uses public structured data and a bounded number of source links. It follows redirects only to allowlisted hosts, limits response sizes, records partial failures, and preserves date-only values without guessing timezones or registration cutoffs. It does not scrape private groups or images. Some sources may reject automated requests.
+Future directions include broader university coverage, improved maintainer review tools, eligibility filters, and separately tested Safari/mobile support. These are not features promised by this release.
 
-The GitHub Actions workflow runs checks on code changes. Daily at 03:23 UTC (09:23 in Bangladesh), or through **Actions → Catalog checks and discovery → Run workflow**, it also collects leads and uploads a 14-day artifact. The workflow has read-only repository permissions; it never auto-publishes extracted leads.
+## License
 
-To publish an event:
-
-1. Open the organizer's official source and verify relevance, dates/timezone, eligibility, registration cutoff, costs, and status. Review dates carefully: game jam voting end dates are not necessarily submission deadlines.
-2. Add a complete reviewed event to `data/events.json` using the existing schema. Use a stable ID; `custom-` and `candidate-` IDs are reserved. Unknown registration deadlines stay `null`. Date-only events use `allDay: true` with an exclusive end date.
-3. Set the event's `lastChecked` to its actual review date and the catalog's `updatedAt` to the publication date. Do not alter verification dates just because the collector ran.
-4. Run the checks, review the diff, and merge/push to `main`. Opted-in extensions retrieve the published catalog on their next refresh. Keep cancelled entries with `status: "cancelled"` so saved-event reminders can be removed.
-
-Community members can use **Event sources → Suggest an event** to open the GitHub event submission form. This requires a GitHub account and creates a public issue after they submit it. Suggestions still require review. The extension's **Add an event** form stays local.
-
-## Roadmap
-
-1. Expand Bangladesh university coverage and add a maintainer review interface for collected leads.
-2. Expand structured event capture coverage and add clearer organizer verification guidance.
-3. Add verified eligibility filters and favorite-topic preferences.
-4. Explore Safari packaging and separately scoped mobile support after the desktop release.
-5. Add optional personal calendar synchronization with explicit consent.
-
-The repository and scheduled collection workflow provide the initial shared publishing pipeline. They cannot discover every event, particularly announcements available only as images, private group posts, or inaccessible pages.
+Copyright © 2026 Sayem Tanvir. Released under the [MIT license](LICENSE).
