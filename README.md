@@ -1,28 +1,69 @@
-# CSE Radar
+<div align="center">
 
-**Discover technology events. Plan your participation. Keep track of registration deadlines.**
+<img src="icons/radar-128.png" width="88" height="88" alt="CSE Radar logo">
 
-CSE Radar is a free, open-source desktop browser extension for students and developers looking for hackathons, game jams, programming contests, university tech fests, workshops, and conferences in Bangladesh and around the world. Find opportunities, follow organizer links, and build a personal event calendar in your browser.
+<h1>CSE Radar</h1>
 
-[Download v1.0.0](https://github.com/SayemTanvir/CSE-Radar/releases/tag/v1.0.0) · [Installation](#installation) · [Privacy](docs/PRIVACY.md) · [Report an issue](https://github.com/SayemTanvir/CSE-Radar/issues) · [MIT license](LICENSE)
+<p><strong>Your next opportunity, on your radar.</strong></p>
 
-![CSE Radar event discovery dashboard](store-assets/screenshots/01-discover.png)
+<p>Find hackathons, game jams, programming contests, and university tech events.<br>Explore Bangladesh and beyond. Save what matters. Plan your next step.</p>
+
+<p>
+  <a href="https://github.com/SayemTanvir/CSE-Radar/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-16886c?style=flat-square" alt="Release v1.0.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3869b8?style=flat-square" alt="MIT license"></a>
+  <a href="https://github.com/SayemTanvir/CSE-Radar/actions/workflows/catalog.yml"><img src="https://github.com/SayemTanvir/CSE-Radar/actions/workflows/catalog.yml/badge.svg" alt="Catalog checks and discovery workflow status"></a>
+</p>
+
+<p>
+  <a href="https://github.com/SayemTanvir/CSE-Radar/releases/download/v1.0.0/cse-radar-1.0.0-chromium.zip"><strong>Download for Chrome · Brave · Edge</strong></a>
+  &nbsp; / &nbsp;
+  <a href="#installation"><strong>Installation guide</strong></a>
+</p>
+
+<p><sub>Free and open source · No account required · No ads or analytics</sub></p>
+
+<img src="store-assets/screenshots/01-discover.png" width="100%" alt="CSE Radar discovery dashboard showing event cards, search filters, and a calendar preview">
+
+<p><a href="#what-you-can-do">Features</a> · <a href="#a-closer-look">Screenshots</a> · <a href="#browser-compatibility">Browsers</a> · <a href="#questions-you-might-have">FAQ</a> · <a href="docs/PRIVACY.md">Privacy</a> · <a href="https://github.com/SayemTanvir/CSE-Radar/issues">Get help</a></p>
+
+</div>
+
+---
+
+### Less searching. More opportunities to build.
+
+A great event can lead to a new skill, a teammate, or your next project. **CSE Radar** helps students and developers bring those opportunities together: discover reviewed events, check organizer details, and keep a personal calendar right in the browser.
+
+Start with the bundled catalog, save an event that interests you, and make it part of your plan.
 
 ## What you can do
 
 | Feature | How it helps |
 | --- | --- |
-| Discover relevant events | Search a reviewed catalog and filter by topic, region, format, category, explicit free entry, and known registration deadlines. |
-| Plan in a calendar | Save opportunities, inspect event details, and open official event, source, and registration links. |
-| Receive reminders | Schedule browser notifications for saved events and verified registration cutoffs; send a test notification from Preferences. |
-| Capture an event page | Use **Save this page** to prepare a draft from published page metadata, then review and complete it before saving. |
-| Manage personal events | Add, edit, or cancel your own events with timezone-aware dates, topics, and links. |
-| Import and export calendars | Review events from a local `.ics` file or export dates and known deadlines to another calendar application. |
-| Refresh the public catalog | Opt in to catalog downloads from this repository, with the last valid catalog available offline. |
+| 🔎 Find your next event | Search a reviewed catalog by topic, region, format, category, free entry, and known registration deadlines. |
+| 🗓️ Make a plan | Save opportunities to your calendar and keep official event, source, and registration links close by. |
+| 🔔 Remember what matters | Get browser reminders for saved events and verified registration cutoffs. |
+| 📌 Save an event you found | Turn published webpage metadata into a draft you can review and complete before saving. |
+| ✏️ Keep it personal | Add, edit, or cancel your own events with timezone-aware dates, topics, and links. |
+| 📂 Bring your calendar along | Review local `.ics` imports or export event dates and known deadlines to another calendar app. |
+| ↻ Refresh when you choose | Opt in to public catalog updates and keep the last valid catalog available offline. |
 
 No account, subscription, or API key is required. Saved events and preferences are stored locally in the browser. There are no ads or analytics.
 
-See the [calendar](store-assets/screenshots/02-calendar.png) and [event details](store-assets/screenshots/03-event-details.png) screenshots for more of the interface.
+## A closer look
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>Your opportunities, in one calendar</strong></td>
+    <td width="50%" align="center"><strong>The details before you commit</strong></td>
+  </tr>
+  <tr>
+    <td><a href="store-assets/screenshots/02-calendar.png"><img src="store-assets/screenshots/02-calendar.png" width="100%" alt="Saved events alongside CSE Radar's monthly calendar"></a></td>
+    <td><a href="store-assets/screenshots/03-event-details.png"><img src="store-assets/screenshots/03-event-details.png" width="100%" alt="Event details with organizer information, dates, eligibility, and official links"></a></td>
+  </tr>
+</table>
+
+<p align="center"><sub>Actual extension screenshots. Click either image for a larger view.</sub></p>
 
 ## Browser compatibility
 
@@ -33,11 +74,23 @@ See the [calendar](store-assets/screenshots/02-calendar.png) and [event details]
 | Microsoft Edge | Chromium ZIP | Manual, unpacked installation; remains installed after restart. |
 | Firefox 140+ | Firefox ZIP | **Temporary developer installation only; removed when Firefox restarts.** |
 
-**Distribution:** GitHub release downloads. No browser-store listing is required for the Chromium instructions below. The Firefox ZIP is unsigned: normal Firefox requires Mozilla signing for permanent installation. A ZIP file is an extension archive, not a double-click setup program. See Mozilla's [temporary installation](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/) and [signing requirements](https://extensionworkshop.com/documentation/publish/signing-and-distribution-overview/).
+> [!IMPORTANT]
+> **Firefox is a temporary developer build.** It is removed when Firefox restarts. Permanent installation in normal Firefox requires Mozilla signing; this release is unsigned. See Mozilla's [temporary installation](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/) and [signing requirements](https://extensionworkshop.com/documentation/publish/signing-and-distribution-overview/).
+
+Downloads are hosted on GitHub. A ZIP is an extension archive, not a double-click setup program; follow the steps below to load it into your browser.
 
 Release testing used actual Chrome, Brave, Edge, and Firefox on Windows 11. This does not establish testing on every operating system. Safari and mobile browsers are outside this release's supported scope; a responsive dashboard alone does not provide phone extension support. Browser versions and evidence are in [release verification](docs/RELEASE-VERIFICATION.md).
 
 ## Installation
+
+**Choose your download:**
+
+| Chrome · Brave · Edge | Firefox 140+ |
+| :---: | :---: |
+| [**Download Chromium ZIP ↓**](https://github.com/SayemTanvir/CSE-Radar/releases/download/v1.0.0/cse-radar-1.0.0-chromium.zip) | [**Download temporary Firefox ZIP ↓**](https://github.com/SayemTanvir/CSE-Radar/releases/download/v1.0.0/cse-radar-1.0.0-firefox.zip) |
+| Manual installation; stays installed after restart. | Temporary developer installation; removed on restart. |
+
+[All release assets and checksums](https://github.com/SayemTanvir/CSE-Radar/releases/tag/v1.0.0)
 
 ### Chrome, Brave, and Microsoft Edge
 
@@ -59,11 +112,17 @@ You do not need Git, Node.js, Python, or a developer account to install the rele
 7. Open the browser's extensions menu, pin **CSE Radar** if desired, and click its icon.
 8. Choose **Open Radar calendar** to start exploring.
 
-The browser must allow developer extensions. On a managed school or work device, administrator policy may prevent this installation. Google's [unpacked installation guide](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked) describes the underlying Chrome workflow.
+> [!TIP]
+> **Keep the extracted folder.** Pick a permanent home such as `Documents/CSE-Radar`, and select the folder that contains `manifest.json` directly. Moving or deleting it later can break the installation.
+
+On a managed school or work device, administrator policy may prevent developer extensions. Google's [unpacked installation guide](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked) explains the Chrome workflow.
 
 ### Firefox: temporary installation
 
 Use Firefox 140 or later. This path is for trying the current unsigned build, and must be repeated after restarting Firefox.
+
+<details>
+<summary><strong>Show Firefox installation steps</strong></summary>
 
 1. From the [release assets](https://github.com/SayemTanvir/CSE-Radar/releases/tag/v1.0.0), download **`cse-radar-1.0.0-firefox.zip`** and extract it into its own folder.
 2. Enter **`about:debugging#/runtime/this-firefox`** in Firefox's address bar.
@@ -73,7 +132,9 @@ Use Firefox 140 or later. This path is for trying the current unsigned build, an
 
 Use the Firefox package, not the Chromium package. Firefox removes temporary add-ons when it restarts, and temporary-installation storage should be treated as disposable. Export any event dates you want to keep before restarting. This release does not provide a signed, permanent Firefox installer; renaming the unsigned ZIP to `.xpi` does not sign it.
 
-### First-time setup
+</details>
+
+### Your first event, in four steps
 
 1. Open **Preferences**, choose your display timezone and reminder lead time, then click **Save preferences**.
 2. Reopen **Preferences**, choose **Send test notification**, and allow browser/operating-system notifications if prompted. An accepted request does not guarantee a visible popup when system notifications are suppressed.
@@ -82,11 +143,22 @@ Use the Firefox package, not the Chromium package. Firefox removes temporary add
 
 ## Everyday use
 
+<details>
+<summary><strong>Discover, capture, and manage events</strong></summary>
+
 - **Discover and verify:** filter opportunities, open an event, and check its organizer link, dates, eligibility, fees, and registration availability before committing. Unknown fees do not count as free, and a missing deadline does not prove registration is open.
 - **Capture a webpage:** open an ordinary event page, click the toolbar's **Save this page**, choose a candidate if offered, and click **Review in Radar**. Complete missing details before saving. Capture reads published metadata, not posters or private form fields, and does not save automatically.
 - **Add your own event:** choose **Add an event**, enter the event's timezone and details, then save. For **Dates only**, enter the first and last event days inclusively. Use **Edit personal event** later to update details or cancel reminders.
+
+</details>
+
+<details>
+<summary><strong>Import or export a calendar</strong></summary>
+
 - **Import a calendar:** choose **Import calendar**, select a local `.ics` file, and review one event at a time. The file stays on your device. Imports accept up to 512 KiB and 50 supported candidates; recurring schedules are skipped, and incomplete or ambiguous times need correction. Re-importing a matching UID reviews an update instead of automatically duplicating it.
 - **Export dates:** export an `.ics` file and import it into your preferred calendar application. Exports contain supported event dates and known deadlines, not a full backup of preferences, drafts, or every stored field. Existing exports do not automatically follow later changes.
+
+</details>
 
 ## Reminders and updates
 
@@ -96,6 +168,9 @@ Use the Firefox package, not the Chromium package. Firefox removes temporary add
 
 **Extension updates** install application changes. GitHub ZIP installations do not automatically update the application:
 
+<details>
+<summary><strong>How to update your installed extension</strong></summary>
+
 1. Export event dates you want to keep. Calendar export is not a complete settings backup.
 2. Download the newer Chromium release ZIP and extract it separately.
 3. Close the Radar dashboard and browser, then replace the extension files inside the **same original installation folder**, keeping its path unchanged.
@@ -103,9 +178,14 @@ Use the Firefox package, not the Chromium package. Firefox removes temporary add
 
 Keep the same browser profile and original folder. Avoid uninstalling the extension or loading another copy from a different path: those actions can remove local data or create a separate extension identity. Firefox's current temporary build must instead be loaded again through `about:debugging`.
 
+</details>
+
 ## Event coverage and sources
 
 The catalog is selective and reviewed. The October 15, 2026 edition contains **19 entries: 17 with confirmed dates and two awaiting dates**. Awaiting dates are not invented calendar appointments. A recent download does not mean every event was recently verified; check each entry's source and **Last checked** date.
+
+<details>
+<summary><strong>Where events come from and how they are reviewed</strong></summary>
 
 The maintenance workflow collects public leads from:
 
@@ -121,7 +201,14 @@ Reviewed entries also cite organizers directly, including NASA Space Apps, ICPC,
 
 Daily collection produces **unreviewed leads**, not automatic catalog additions. A maintainer checks relevance, sources, dates, fees, eligibility, and known cutoffs before publication. Private groups, image-only announcements, and inaccessible sources may not be covered. To suggest an opportunity, use **Event sources → Suggest an event** or [open an issue](https://github.com/SayemTanvir/CSE-Radar/issues); suggestions are public and require review.
 
+</details>
+
 ## Privacy and permissions
+
+**Your saved events stay in your browser.** There is no personal-calendar cloud synchronization. Capture happens only after you choose **Save this page**, and catalog downloads are optional.
+
+<details>
+<summary><strong>See storage, permissions, and optional network access</strong></summary>
 
 - Saved events and preferences stay in local browser extension storage; there is no personal-calendar cloud synchronization.
 - `storage`, `alarms`, and `notifications` support local planning and reminders. `activeTab` and `scripting` support capture after **Save this page**, without permanent access to every website.
@@ -129,9 +216,51 @@ Daily collection produces **unreviewed leads**, not automatic catalog additions.
 - Optional updates request access to `raw.githubusercontent.com` to download one fixed public catalog. Saved events, searches, captured pages, and preferences are not sent with that request. GitHub receives ordinary connection metadata such as your IP address.
 - Disabling updates stops requests and removes the optional host permission. Uninstalling removes extension-managed local data; exported files and external calendar entries remain wherever you saved them.
 
+</details>
+
 Read the [privacy policy](docs/PRIVACY.md) for storage, captured URLs, retention, external services, and sharing details. GitHub issues are public; do not post private calendars, invitation tokens, or unredacted personal information.
 
-## Development
+## Questions you might have
+
+<details>
+<summary><strong>Is CSE Radar free?</strong></summary>
+
+Yes. The extension and source code are free under the [MIT license](LICENSE). No account, subscription, or API key is needed. Individual events can have their own fees and eligibility rules; check the organizer's page.
+
+</details>
+
+<details>
+<summary><strong>Will it work without internet?</strong></summary>
+
+The bundled catalog, your saved events, and local planning remain available offline. Opening organizer websites and downloading catalog updates require internet access.
+
+</details>
+
+<details>
+<summary><strong>Why did my reminder not appear?</strong></summary>
+
+Save the event first, keep the browser running, and check the reminder lead time in **Preferences**. Allow notifications in both the browser and your operating system. Use **Send test notification** to check your setup; system settings can still hide the popup. See [reminder troubleshooting](docs/SUPPORT.md#reminders-do-not-appear).
+
+</details>
+
+<details>
+<summary><strong>Can I use it on my phone or in Safari?</strong></summary>
+
+This release targets desktop Chrome, Brave, Edge, and temporary Firefox installation. Mobile and Safari packages are not provided. See [browser compatibility](#browser-compatibility) before downloading.
+
+</details>
+
+<details>
+<summary><strong>Found a missing event or an incorrect date?</strong></summary>
+
+We welcome corrections and suggestions. [Share the official event link](https://github.com/SayemTanvir/CSE-Radar/issues) or use **Event sources → Suggest an event**. Suggestions are reviewed before joining the public catalog. Issues are public, so leave out private schedules and invitation tokens.
+
+</details>
+
+## For developers
+
+<details>
+<summary><strong>Build locally, run checks, and explore the project</strong></summary>
 
 The runtime uses plain HTML, CSS, JavaScript, and WebExtension APIs. There are no npm runtime dependencies or transpilation steps. Python 3 builds the release archives; Node.js runs the JavaScript checks.
 
@@ -162,6 +291,8 @@ Real-browser runners in `tests/` cover discovery, persistence, capture, import/e
 | `data/` | Reviewed catalog, source directory, and discovery configuration. |
 | `scripts/`, `tests/` | Packaging, lead collection, and verification tooling. |
 
+</details>
+
 ## Contributing and support
 
 Bug reports, source corrections, event suggestions, and focused pull requests are welcome. Include a reproducible example, browser/version, extension version, and any relevant public organizer link. Run relevant checks before proposing code changes. See [support](docs/SUPPORT.md) for troubleshooting and reporting guidance.
@@ -170,6 +301,12 @@ When editing the catalog, verify the official source, keep stable event IDs, pre
 
 Future directions include broader university coverage, improved maintainer review tools, eligibility filters, and separately tested Safari/mobile support. These are not features promised by this release.
 
-## License
+---
 
-Copyright © 2026 Sayem Tanvir. Released under the [MIT license](LICENSE).
+<div align="center">
+
+<p><strong>Help more students find their next opportunity.</strong></p>
+<p><a href="https://github.com/SayemTanvir/CSE-Radar/issues">Suggest an event</a> · <a href="https://github.com/SayemTanvir/CSE-Radar/issues">Share feedback</a> · <a href="https://github.com/SayemTanvir/CSE-Radar">Star the project</a></p>
+<p><sub>Created by <a href="https://github.com/SayemTanvir">Sayem Tanvir</a> · Copyright © 2026 · <a href="LICENSE">MIT license</a></sub></p>
+
+</div>
