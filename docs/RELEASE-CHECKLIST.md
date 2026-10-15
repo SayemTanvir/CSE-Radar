@@ -9,7 +9,8 @@ This checklist records gates; completed evidence is linked in [release verificat
 - [x] Run `python scripts/package.py`; inspect both versioned ZIPs for a root `manifest.json`, correct browser background configuration, required runtime assets, and absence of test profiles, fixtures, secrets, or development artifacts.
 - [x] Install the exact packaged build in desktop Chrome, Brave, Edge, and Firefox. Verify popup, dashboard, persistence, explicit capture, review, personal edits, import/export, optional updates, and reminders-off. A generated Firefox manifest alone is insufficient evidence of Firefox support.
 - [x] Confirm a real notification is visibly displayed: the owner reported the test notification working on October 15, 2026, in response to the normal Brave/Windows check. This is manual evidence, not inferred from alarm inspection.
-- [ ] Complete normal-install browser-restart and notification-click verification; validate denied-notification behavior in deployment testing. Cancellation/rescheduling already has automated coverage.
+- [x] Complete browser-restart and notification-click verification on the owner's normal Brave setup: both checks were confirmed on October 15, 2026. Cancellation/rescheduling also has automated coverage.
+- [ ] Validate denied OS-notification behavior and the eventual store-installed restart/update path during deployment testing.
 - [x] Confirm keyboard focus, dialog names/scrolling, filter pressed states, zoom/narrow-window layout, all-day ranges, named timezones, and deadline export in the packaged UI.
 - [x] Verify catalog downloads against the live public URL, opt-in/opt-out, denied host permission, offline fallback, and current saved-event reconciliation. A mocked network result is not a live-download check.
 - [x] Verify capture drafts become unavailable after 24 hours and are cleaned when browser execution permits; no unsaved capture/import preview schedules reminders.
