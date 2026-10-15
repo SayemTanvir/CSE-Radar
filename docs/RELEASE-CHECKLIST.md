@@ -4,10 +4,10 @@ This checklist records gates; completed evidence is linked in [release verificat
 
 ## Package and evidence
 
-- [ ] Freeze the intended version and confirm root and generated manifests match it. Record the release commit and archive hashes.
-- [ ] Run the documented unit/data/collection checks and relevant real-browser tests against that commit; retain a dated result with browser/OS versions and limitations.
+- [x] Freeze the intended version and confirm root and generated manifests match it. Record the release commit and archive hashes.
+- [x] Run the documented unit/data/collection checks and relevant real-browser tests against that commit; retain a dated result with browser/OS versions and limitations.
 - [x] Run `python scripts/package.py`; inspect both versioned ZIPs for a root `manifest.json`, correct browser background configuration, required runtime assets, and absence of test profiles, fixtures, secrets, or development artifacts.
-- [ ] Install the exact packaged build in desktop Chrome, Brave, Edge, and Firefox. Verify popup, dashboard, persistence, explicit capture, review, personal edits, import/export, optional updates, and reminders-off. A generated Firefox manifest alone is insufficient evidence of Firefox support.
+- [x] Install the exact packaged build in desktop Chrome, Brave, Edge, and Firefox. Verify popup, dashboard, persistence, explicit capture, review, personal edits, import/export, optional updates, and reminders-off. A generated Firefox manifest alone is insufficient evidence of Firefox support.
 - [ ] Test a real OS notification and notification-click navigation, cancellation/rescheduling, browser restart, and denied-notification behavior. Record the OS tested; alarm inspection alone does not prove a visible notification.
 - [x] Confirm keyboard focus, dialog names/scrolling, filter pressed states, zoom/narrow-window layout, all-day ranges, named timezones, and deadline export in the packaged UI.
 - [x] Verify catalog downloads against the live public URL, opt-in/opt-out, denied host permission, offline fallback, and current saved-event reconciliation. A mocked network result is not a live-download check.
@@ -19,8 +19,8 @@ This checklist records gates; completed evidence is linked in [release verificat
 - [x] Review [privacy](PRIVACY.md), [support](SUPPORT.md), [store copy](STORE-LISTING.md), and README against the final implementation. Update dates and behavior together; do not add blanket no-data or every-browser claims.
 - [x] Ensure the project owner has chosen any required distribution/source license. The owner explicitly selected MIT; LICENSE is included in both archives.
 - [x] Inspect `store-assets/icon-128.png`, `promo-small.png`, and three screenshot files listed in STORE-LISTING.md. Confirm exact dimensions, readable actual UI, current version behavior, and no private information.
-- [ ] Make the policy and support documents publicly reachable at their final HTTPS URLs. Check while signed out. A local file or unpushed candidate URL does not satisfy this gate.
-- [ ] Confirm public issue reporting is enabled and the support link works; clearly identify it as public. Do not invent a support email or a private reporting channel.
+- [x] Make the policy and support documents publicly reachable at their final HTTPS URLs. Check while signed out. A local file or unpushed candidate URL does not satisfy this gate.
+- [x] Confirm public issue reporting is enabled and the support link works; clearly identify it as public. Do not invent a support email or a private reporting channel.
 
 ## Owner/account steps — not completed by preparing files
 

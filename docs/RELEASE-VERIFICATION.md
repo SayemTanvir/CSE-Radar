@@ -2,6 +2,8 @@
 
 Verified October 15, 2026, on Windows 11, build 26300. This record concerns the desktop application and its unsigned submission packages. It is not a claim of browser-store approval, Mozilla signing, Safari/mobile support, or testing on every operating system.
 
+Runtime source freeze: `6d0181199f69086085b101584952253f08ca1152`. Its [CI checks and package build passed](https://github.com/SayemTanvir/CSE-Radar/actions/runs/38705269106). Later documentation-only updates do not alter the tested runtime archives.
+
 ## Frozen release scope
 
 Reviewed local/international event discovery; source and registration links; search, topic, region, format, free-entry and deadline filters; local saved calendars; browser reminders; timezone-aware personal-event creation/editing/cancellation; explicit webpage capture with review; local iCalendar import with review and duplicate updates; calendar export; optional catalog updates and offline fallback. Optional features in the roadmap are outside 1.0 rather than unfinished promised functionality.
@@ -31,7 +33,7 @@ The deterministic catalog-integration test deliberately simulates network respon
 - A genuine scheduled reminder was delivered in both Chrome and Brave: a real alarm produced the reminder notification and persisted its delivery marker. The test does not manually invoke the alarm listener or create the reminder notification itself.
 - Calendar parsing tests cover explicit UTC/IANA timezones, DST ambiguity, all-day exclusive/inclusive boundaries, Unicode line folding, unsafe links, malformed/oversized files, recurrence skipping, exact known cutoff companions and full UID identity.
 - UI checks cover 320, 360, 390, 430, 768, 1024 and 1440 CSS pixels; named dialogs, keyboard focus preservation, filter pressed states, personal topic edits, calendar dates and exports.
-- JavaScript core, feed, catalog, planning, capture and calendar-import suites pass. Python collection tests and release-archive isolation/reproducibility checks pass. CI repeats these checks using Node 22 and Python 3.13.
+- JavaScript core, feed, catalog, planning, capture and calendar-import suites pass. Python collection tests and release-archive isolation/reproducibility checks pass. CI repeats the JavaScript/Python unit, data, collection and archive checks using Node 22 and Python 3.13; the real-browser runs were executed separately in isolated local profiles.
 
 ## Packages and listing material
 
@@ -55,5 +57,7 @@ The browser API accepted test notifications, and actual reminder alarm delivery 
 `tests/restart_smoke.py` attempts a same-profile process restart without reinstalling the extension. Chrome and Brave's experimental `Extensions.loadUnpacked` registration did not persist across that test restart, so the startup-persistence portion is explicitly skipped rather than reported as a pass. It does not reinstall the extension to manufacture a startup result. Ordinary page-reload persistence passes; the eventual normally installed store build's browser-restart/update path remains a release-distribution verification step.
 
 Developer-account identity/contact details, account registration, store agreements, store submission review, Mozilla signing, and checking the eventual live install/update links remain publication tasks. The owner must provide genuine account details and complete any verification or payment required by the stores. The Firefox ZIP is still unsigned; its temporary development installation is not a permanent signed distribution.
+
+The repository is public with issues enabled. Anonymous requests to the published privacy policy, support guide and issue page all returned HTTP 200 and the expected content after the runtime-source commit was pushed. No account or cookies were supplied for this access check.
 
 Follow [the release checklist](RELEASE-CHECKLIST.md) and [submission materials](STORE-LISTING.md). Publishing and social announcements should follow successful final checks and owner authorization, not merely the existence of a ZIP.
