@@ -17,6 +17,18 @@ SOURCE = {'id': 'test', 'url': 'https://events.example.org/list',
 EVENTIFY_SOURCE = {'id': 'eventifybd', 'url': 'https://api.eventifybd.com/events',
                   'listingUrl': 'https://eventifybd.com/', 'adapter': 'eventifybd',
                   'allowedHosts': ['api.eventifybd.com', 'eventifybd.com']}
+DIU_SOURCE = {'id': 'diu-student-hub', 'url': 'https://studentshub.daffodilvarsity.edu.bd/events',
+              'adapter': 'diu-events', 'allowedHosts': ['studentshub.daffodilvarsity.edu.bd']}
+
+
+def diu_fixture(title='Cybersecurity Conference 2026', badge='Nov 21, 2026',
+                status='Upcoming', href='/event/29/home', description='Conference and CTF challenges'):
+    return f'''<div class="club-card"><div class="event-date-badge"><i class="fas fa-calendar"></i>{badge}</div>
+        <div class="club-content"><div class="club-header"><h3><span>{title}</span></h3>
+        <div class="club-rating"><i></i><span>08:00 AM</span></div></div><p>{description}</p>
+        <div class="club-footer"><div class="club-meta"><span class="club-type-badge"><i></i>Conference Hall</span>
+        <span class="club-type-badge">Free</span></div><span class="event-status">{status}</span></div>
+        <a class="btn-details" href="{href}">View Details</a></div></div>'''
 
 
 class CollectionTests(unittest.TestCase):
@@ -223,6 +235,67 @@ class CollectionTests(unittest.TestCase):
         result, report = collector.collect({'sources': [EVENTIFY_SOURCE]}, lambda url, hosts: ('{"events": null}', url), OBSERVED)
         self.assertEqual(result['candidates'], [])
         self.assertIn('events array', report['sources'][0]['errors'][0]['error'])
+
+    def test_diu_reads_visible_cards_and_preserves_date_precision(self):
+        html = '<nav><h3>Unrelated navigation</h3></nav>' + diu_fixture()
+        found, links, warnings = collector.parse_diu_events(html, DIU_SOURCE, DIU_SOURCE['url'], OBSERVED)
+        self.assertEqual(len(found), 1)
+        event = found[0]
+        self.assertEqual(event['start'], '2026-11-21')
+        self.assertIsNone(event['end'])
+        self.assertIsNone(event['deadline'])
+        self.assertEqual(event['title'], 'Cybersecurity Conference 2026')
+        self.assertEqual(event['sourceReportedTime'], '08:00 AM')
+        self.assertEqual(event['sourceReportedDate'], 'Nov 21, 2026')
+        self.assertEqual(event['sourceKind'], 'university-listing')
+        self.assertEqual(event['location'], 'Conference Hall')
+        self.assertEqual(event['url'], 'https://studentshub.daffodilvarsity.edu.bd/event/29/home')
+        self.assertEqual(links, [])
+        self.assertIn('"retained": 1', warnings[0])
+
+    def test_diu_excludes_unrelated_completed_past_and_unsafe_cards(self):
+        html = ''.join([diu_fixture(title='Photography Exhibition', description='Art event'),
+                        diu_fixture(badge='Sep 01, 2026'),
+                        diu_fixture(status='Completed'),
+                        diu_fixture(href='https://evil.example.org/event/29/home'),
+                        diu_fixture(href='/login'),
+                        diu_fixture(href='javascript:alert(1)')])
+        found, _, warnings = collector.parse_diu_events(html, DIU_SOURCE, DIU_SOURCE['url'], OBSERVED)
+        self.assertEqual(found, [])
+        self.assertIn('"unrelated": 1', warnings[0])
+        self.assertIn('"past": 2', warnings[0])
+        self.assertIn('"invalid": 3', warnings[0])
+
+    def test_diu_source_conflict_and_unknown_date_remain_unreviewed(self):
+        html = diu_fixture(title='CyberCon 2025') + diu_fixture(title='Malware Workshop', badge='To be announced')
+        found, _, _ = collector.parse_diu_events(html, DIU_SOURCE, DIU_SOURCE['url'], OBSERVED)
+        self.assertEqual(len(found), 2)
+        self.assertTrue(any('SOURCE CONFLICT' in note for note in found[0]['notes']))
+        self.assertIsNone(found[1]['start'])
+        self.assertEqual(found[1]['sourceReportedDate'], 'To be announced')
+        self.assertTrue(all(event['reviewStatus'] == 'unreviewed' for event in found))
+        self.assertIsNone(collector.diu_card_date('Feb 30, 2026'))
+        self.assertIsNone(collector.diu_card_date('not a date'))
+
+    def test_diu_card_date_filter_uses_bangladesh_day_and_collection_limit(self):
+        html = diu_fixture(badge='Oct 14, 2026') + diu_fixture(badge='Oct 15, 2026') + diu_fixture(title='AI Workshop 2026', badge='Oct 16, 2026', href='/event/30/home')
+        calls = []
+        def fetch(url, hosts):
+            calls.append(url)
+            return html, url
+        result, report = collector.collect({'sources': [{**DIU_SOURCE, 'maxCandidates': 1}]}, fetch, '2026-10-14T20:00:00Z')
+        self.assertEqual(len(result['candidates']), 1)
+        self.assertEqual(result['candidates'][0]['start'], '2026-10-15')
+        self.assertEqual(calls, [DIU_SOURCE['url']])
+        self.assertEqual(report['sources'][0]['fetchedPages'], 1)
+
+    def test_diu_markup_change_report_is_honest_and_oversize_rejected(self):
+        found, _, warnings = collector.parse_diu_events('<h1>Events</h1>', DIU_SOURCE, DIU_SOURCE['url'], OBSERVED)
+        self.assertEqual(found, [])
+        self.assertTrue(any('markup may have changed' in warning for warning in warnings))
+        result, report = collector.collect({'sources': [DIU_SOURCE]}, lambda url, hosts: ('x' * (collector.MAX_BYTES + 1), url), OBSERVED)
+        self.assertEqual(result['candidates'], [])
+        self.assertIn('1 MiB', report['sources'][0]['errors'][0]['error'])
 
 
 if __name__ == '__main__':

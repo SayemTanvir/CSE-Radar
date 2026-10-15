@@ -115,6 +115,13 @@ async def exercise(endpoint, base_url):
         assert await cdp.evaluate("document.querySelector('#stat-upcoming').textContent") == str(confirmed_count)
         assert await cdp.evaluate("document.querySelector('#catalog-status').textContent.includes('reviewed events')")
         assert await cdp.evaluate("document.querySelector('#feed-refresh').disabled")
+        topic_events = [e for e in active_events if any(tag.lower() == 'nasa' for tag in e['tags'])]
+        await cdp.evaluate("document.querySelector('#topic-filter').value='nasa'; document.querySelector('#topic-filter').dispatchEvent(new Event('change'))")
+        assert await cdp.evaluate("document.querySelectorAll('.event-card').length") == len(topic_events)
+        assert await cdp.evaluate("document.querySelector('#results-note').textContent.includes('Topic: NASA')")
+        await cdp.evaluate("document.querySelector('#reset-filter-button').click()")
+        assert await cdp.evaluate("document.querySelector('#topic-filter').value") == ''
+        assert await cdp.evaluate("document.querySelectorAll('.event-card').length") == len(active_events)
         await cdp.screenshot('dashboard-desktop.png')
         await cdp.evaluate("document.querySelector('#search').value='NASA'; document.querySelector('#search').dispatchEvent(new Event('input'))")
         assert await cdp.evaluate("document.querySelectorAll('.event-card').length") == 1
@@ -136,13 +143,22 @@ async def exercise(endpoint, base_url):
         await cdp.evaluate("document.querySelector('#clear-filters').click(); document.querySelector('#add-open').click()")
         await cdp.evaluate("""
             var form = document.querySelector('#add-form');
-            var values = {title:'Local student hackathon <script>alert(1)</script>',organizer:'University Club',url:'https://example.org/event',start:'2030-01-20T09:00',end:'2030-01-21T18:00',deadline:'2030-01-15T23:59',eligibility:'Students'};
+            var values = {title:'Local student hackathon <script>alert(1)</script>',organizer:'University Club',url:'https://example.org/event',start:'2030-01-20T09:00',end:'2030-01-21T18:00',deadline:'2030-01-15T23:59',eligibility:'Students',topics:'Robotics, embedded systems'};
             for (var [key,value] of Object.entries(values)) form.elements.namedItem(key).value=value;
             form.requestSubmit();
         """)
         await cdp.wait("!document.querySelector('#add-dialog').open")
         assert await cdp.evaluate("document.querySelector('#saved-count').textContent") == '2'
         assert await cdp.evaluate("document.querySelectorAll('script').length") == 5
+        await cdp.evaluate("document.querySelector('#topic-filter').value='robotics'; document.querySelector('#topic-filter').dispatchEvent(new Event('change')); document.querySelector('.event-title-button').click(); document.querySelector('#edit-personal-event').click()")
+        assert await cdp.evaluate("document.querySelector('#add-form').elements.namedItem('topics').value") == 'Robotics, embedded systems'
+        await cdp.evaluate("document.querySelector('#add-form').elements.namedItem('topics').value='Cybersecurity, all'; document.querySelector('#add-form').requestSubmit()")
+        await cdp.wait("!document.querySelector('#add-dialog').open")
+        assert not await cdp.evaluate("[...document.querySelector('#topic-filter').options].some(option=>option.value==='robotics')")
+        await cdp.evaluate("document.querySelector('#topic-filter').value='all'; document.querySelector('#topic-filter').dispatchEvent(new Event('change'))")
+        assert await cdp.evaluate("document.querySelectorAll('.event-card').length") == 1
+        assert not await cdp.evaluate("[...document.querySelector('#topic-filter').options].some(option=>/^calendar:/.test(option.value))")
+        await cdp.evaluate("document.querySelector('#reset-filter-button').click()")
         await cdp.evaluate("document.querySelector('#settings-open').click(); document.querySelector('#reminder-select').value='0'; document.querySelector('#timezone-select').value='UTC'; document.querySelector('#settings-form').requestSubmit()")
         await cdp.wait("!document.querySelector('#settings-dialog').open")
         assert await cdp.evaluate("JSON.parse(localStorage.getItem('cse-radar-preview')).radarReminderHours") == 0

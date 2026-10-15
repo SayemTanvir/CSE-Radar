@@ -4,6 +4,7 @@ import json
 import shutil
 import struct
 import zlib
+import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -59,6 +60,18 @@ def package():
             manifest['browser_specific_settings'] = {'gecko': {'id': 'cse-radar@local.extension', 'strict_min_version': '140.0', 'data_collection_permissions': {'required': ['none']}}}
             (destination / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
         print(f'Built {destination}')
+        version = json.loads((destination / 'manifest.json').read_text(encoding='utf-8'))['version']
+        # Package only runtime assets. Repository files, test fixtures, local
+        # profiles and discovery artifacts never belong in extension archives.
+        assets = files + ['data/events.json', 'data/sources.json'] + [f'icons/radar-{size}.png' for size in (16, 32, 48, 128)]
+        archive = ROOT / 'dist' / f'cse-radar-{version}-{target}.zip'
+        with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as output:
+            for name in sorted(assets):
+                entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+                entry.compress_type = zipfile.ZIP_DEFLATED
+                entry.external_attr = 0o644 << 16
+                output.writestr(entry, (destination / name).read_bytes())
+        print(f'Packaged {archive}')
 
 if __name__ == '__main__':
     import sys

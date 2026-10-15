@@ -7,12 +7,31 @@
   const categoryNames = { hackathon: 'Hackathon', gamejam: 'Game jam', contest: 'Contest', fest: 'Tech fest', workshop: 'Workshop', conference: 'Conference' };
   const modeNames = { online: 'Online', 'in-person': 'In person', hybrid: 'Hybrid' };
   const routeNames = { discover: 'Discover', saved: 'My calendar', deadlines: 'Deadlines', sources: 'Event sources' };
-  const state = { events: [], sources: [], saved: [], zone: 'Asia/Dhaka', reminderHours: 24, route: 'discover', category: 'all', scope: 'all', mode: 'all', freeOnly: false, deadlineFilter: 'all', query: '', view: 'list', month: '', day: null, detailId: null, updatedAt: null, loadError: false, feedEnabled: false, feedStatus: {}, feedBusy: false, catalogOrigin: 'bundled', cachedCatalog: null };
+  const state = { events: [], sources: [], saved: [], zone: 'Asia/Dhaka', reminderHours: 24, route: 'discover', category: 'all', scope: 'all', mode: 'all', topic: '', freeOnly: false, deadlineFilter: 'all', query: '', view: 'list', month: '', day: null, detailId: null, updatedAt: null, loadError: false, feedEnabled: false, feedStatus: {}, feedBusy: false, catalogOrigin: 'bundled', cachedCatalog: null };
   let formContext = { editId: null, draftId: null, sourceUrl: null, tags: [] };
   const importState = { candidates: [], warnings: [], generation: 0 };
   let toastTimeout;
   let saving = false;
   let catalog;
+  let topicOptionsKey = '';
+  function isInternalTag(tag) { return /^calendar:/i.test(tag) || ['calendar import', 'page capture'].includes(tag.toLowerCase()); }
+  function topicTags(event) { return event.tags.filter(tag => !isInternalTag(tag)); }
+  function renderTopics() {
+    const topics = new Map();
+    for (const event of allEvents()) for (const tag of new Set(topicTags(event).map(value => value.toLowerCase()))) {
+      const current = topics.get(tag);
+      topics.set(tag, { label: current?.label || topicTags(event).find(value => value.toLowerCase() === tag), count: (current?.count || 0) + 1 });
+    }
+    const choices = [...topics].sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0])).slice(0, 60);
+    if (state.topic !== '' && !choices.some(([key]) => key === state.topic)) choices.push([state.topic, { label: topics.get(state.topic)?.label || state.topic }]);
+    choices.sort((a, b) => a[0].localeCompare(b[0]));
+    const key = JSON.stringify(choices.map(([value, item]) => [value, item.label]));
+    if (key !== topicOptionsKey) {
+      $('#topic-filter').replaceChildren(new Option('Any topic or skill', ''), ...choices.map(([value, item]) => new Option(item.label, value)));
+      topicOptionsKey = key;
+    }
+    $('#topic-filter').value = state.topic;
+  }
   function node(tag, className, text) {
     const element = document.createElement(tag);
     if (className) element.className = className;
@@ -115,6 +134,7 @@
       (state.category === 'all' || event.category === state.category) &&
       (state.scope === 'all' || event.scope === state.scope) &&
       (state.mode === 'all' || event.mode === state.mode) &&
+      (state.topic === '' || topicTags(event).some(tag => tag.toLowerCase() === state.topic)) &&
       (!state.freeOnly || RadarPlanning.isExplicitlyFree(event.fee)) &&
       RadarPlanning.matchesDeadline(event, state.deadlineFilter) &&
       (!state.query || [event.title, event.organizer, event.description, event.country, event.city, ...event.tags].join(' ').toLowerCase().includes(state.query))
@@ -155,6 +175,7 @@
   }
   function render() {
     const focused = rememberFocus();
+    renderTopics();
     const upcoming = allEvents().filter(isUpcoming);
     $('#discover-count').textContent = upcoming.length;
     $('#saved-count').textContent = state.saved.length;
@@ -175,6 +196,7 @@
     const custom = state.saved.filter(e => e.id.startsWith('custom-')).length;
     $('#results-note').textContent = state.route === 'saved' ? `${events.length} saved ${events.length === 1 ? 'opportunity' : 'opportunities'} · reminders ${state.reminderHours === 0 ? 'off' : preview ? 'available in the installed extension' : `${state.reminderHours}h before dates`}` : state.route === 'deadlines' ? 'Only explicitly published registration cutoffs appear here.' : 'Upcoming + awaiting dates · sorted by start date';
     if (state.freeOnly) $('#results-note').textContent += ' · Explicitly listed free entry';
+    if (state.topic !== '') $('#results-note').textContent += ' · Topic: ' + $('#topic-filter').selectedOptions[0].textContent;
     if (state.deadlineFilter === 'exclude-closed') $('#results-note').textContent += ' · Unknown cutoffs remain visible';
     const list = $('#event-list');
     list.replaceChildren(...events.map(eventCard));
@@ -317,10 +339,10 @@
     render();
   }
   function resetFilters() {
-    state.category = state.scope = state.mode = 'all'; state.query = '';
+    state.category = state.scope = state.mode = 'all'; state.topic = ''; state.query = '';
     state.freeOnly = false; state.deadlineFilter = 'all';
     $('#free-filter').checked = false; $('#deadline-filter').value = 'all';
-    $('#search').value = ''; $('#scope-filter').value = $('#mode-filter').value = 'all';
+    $('#search').value = ''; $('#scope-filter').value = $('#mode-filter').value = 'all'; $('#topic-filter').value = '';
     $$('[data-category]').forEach(b => { b.classList.toggle('selected', b.dataset.category === 'all'); b.setAttribute('aria-pressed', String(b.dataset.category === 'all')); });
     render();
   }
@@ -336,6 +358,10 @@
     const end = allDay ? RadarPlanning.dateOnlyToISO(RadarPlanning.shiftDay(value('end'), 1), value('timezone')) : parseDate('end');
     const editId = formContext.editId;
     const draftId = formContext.draftId;
+    const topics = value('topics').split(',').map(tag => tag.trim()).filter(Boolean);
+    if (topics.some(tag => isInternalTag(tag))) throw new Error('Choose topics such as AI or programming; calendar labels are reserved.');
+    const tags = [...new Set([...formContext.tags.filter(isInternalTag), ...topics])];
+    if (tags.length > 20 || topics.some(tag => tag.length > 80)) throw new Error('Use a few short topics, with at most 20 labels and 80 characters per topic.');
     const event = RadarCore.validateEvent({
       id: editId || 'custom-' + crypto.randomUUID(), title: value('title'), organizer: value('organizer'),
       category: value('category'), scope: value('country').toLowerCase() === 'bangladesh' ? 'local' : 'international',
@@ -343,7 +369,7 @@
       deadline: parseDate('deadline'), timezone: value('timezone'),
       eligibility: value('eligibility') || 'Check the organizer’s rules', fee: value('fee') || 'Check the official event page',
       description: value('description') || 'Personal event added by you. Check the official organizer for complete details.',
-      url: value('url'), registrationUrl: value('registrationUrl') || null, sourceUrl: formContext.sourceUrl || value('url'), lastChecked: dayKey(Date.now(), 'Asia/Dhaka'), status: value('status'), tags: formContext.tags
+      url: value('url'), registrationUrl: value('registrationUrl') || null, sourceUrl: formContext.sourceUrl || value('url'), lastChecked: dayKey(Date.now(), 'Asia/Dhaka'), status: value('status'), tags
     });
     if (!editId && Date.parse(event.end) <= Date.now()) throw new Error('Please add an event that has not ended yet.');
     if (event.deadline && Date.parse(event.deadline) > Date.parse(event.end)) throw new Error('The registration deadline cannot be after the event ends.');
@@ -388,6 +414,7 @@
     form.elements.namedItem('category').value = event?.category || 'hackathon';
     setDateMode(event?.allDay === true);
     if (event) {
+      form.elements.namedItem('topics').value = topicTags(event).join(', ');
       for (const key of ['title', 'organizer', 'category', 'url', 'registrationUrl', 'country', 'city', 'mode', 'fee', 'eligibility', 'description', 'status']) form.elements.namedItem(key).value = event[key] || '';
       form.elements.namedItem('start').value = !event.start ? '' : event.allDay ? event.start.slice(0, 10) : RadarPlanning.localParts(event.start, event.timezone);
       form.elements.namedItem('end').value = !event.end ? '' : event.allDay ? RadarPlanning.shiftDay(event.end.slice(0, 10), -1) : RadarPlanning.localParts(event.end, event.timezone);
@@ -593,6 +620,7 @@
     $('#search').addEventListener('input', event => { state.query = event.target.value.trim().toLowerCase(); render(); });
     $('#scope-filter').addEventListener('change', event => { state.scope = event.target.value; render(); });
     $('#mode-filter').addEventListener('change', event => { state.mode = event.target.value; render(); });
+    $('#topic-filter').addEventListener('change', event => { state.topic = event.target.value; render(); });
     $('#free-filter').addEventListener('change', event => { state.freeOnly = event.target.checked; render(); });
     $('#deadline-filter').addEventListener('change', event => { state.deadlineFilter = event.target.value; render(); });
     $('#clear-filters').addEventListener('click', resetFilters);

@@ -3,6 +3,16 @@
   "description": "Public discovery sources. Output is unreviewed leads, never a published event feed. Exact hosts also restrict every redirect and linked-page fetch.",
   "sources": [
     {
+      "id": "diu-student-hub",
+      "url": "https://studentshub.daffodilvarsity.edu.bd/events",
+      "allowedHosts": ["studentshub.daffodilvarsity.edu.bd"],
+      "adapter": "diu-events",
+      "country": "Bangladesh",
+      "maxLinkedPages": 0,
+      "maxCandidates": 30,
+      "notes": "Official DIU Student Hub public event cards. Reads one listing page; no login, registrations or pagination. Retains technology-related current/future cards and unknown-date partial leads; excludes Completed/Cancelled and past date badges. Source badge dates stay date-only, clock text has no inferred timezone, and title/date year conflicts are flagged. Individual organizers, full details and eligibility require human review."
+    },
+    {
       "id": "eventifybd",
       "url": "https://api.eventifybd.com/events",
       "listingUrl": "https://eventifybd.com/",

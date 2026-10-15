@@ -63,6 +63,34 @@
     "description": "University computer club contest listings, ICPC resources and programming community updates. No future fest date is asserted here."
   },
   {
+    "id": "diu-student-hub",
+    "name": "DIU Student Hub Events",
+    "url": "https://studentshub.daffodilvarsity.edu.bd/events",
+    "scope": "local",
+    "description": "Official Daffodil International University student event listings. Used to discover leads; check event titles, dates and organizer details before publication because some listing years can conflict."
+  },
+  {
+    "id": "bdosn-bdgpc",
+    "name": "BdOSN Bangladesh Girls' Programming Contest",
+    "url": "https://www.bdosn.org/programs/bdgpc",
+    "scope": "local",
+    "description": "Official organizer program page for girls' competitive programming, training camps, eligibility and registration. Exact 2026 contest dates remain to be announced."
+  },
+  {
+    "id": "ieeextreme",
+    "name": "IEEEXtreme",
+    "url": "https://ieeextreme.org/",
+    "scope": "international",
+    "description": "Official IEEE global programming competition dates, membership requirements, proctor rules and registration. Check the current edition's rules before participating."
+  },
+  {
+    "id": "github-dev-days",
+    "name": "GitHub Dev Days",
+    "url": "https://luma.com/dev-days",
+    "scope": "international",
+    "description": "Official Dev Days calendar of community workshops about GitHub Copilot and developer workflows. Local event dates, venues and approval requirements are published on individual organizer listings."
+  },
+  {
     "id": "basis-space-apps",
     "name": "BASIS NASA Space Apps Bangladesh",
     "url": "https://nsac.basis.org.bd/",

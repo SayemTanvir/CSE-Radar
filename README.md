@@ -6,9 +6,9 @@ CSE Radar is a browser extension for discovering CSE opportunities in Bangladesh
 
 ## Current scope
 
-Version 0.4 includes a **reviewed event catalog with optional updates**, reviewed capture from the current event page, local calendar import, editable personal events, and free-entry and registration-deadline filters. Enable **Preferences → Enable event updates** to download new catalog editions from this repository without reinstalling. The extension checks every six hours while the browser runs; **Refresh events** checks immediately. Updates are off by default. The bundled catalog and last valid download remain available offline.
+Version 0.5 includes a **reviewed event catalog with optional updates**, reviewed capture from the current event page, local calendar import, editable personal events, and topic, free-entry and registration-deadline filters. Enable **Preferences → Enable event updates** to download new catalog editions from this repository without reinstalling. The extension checks every six hours while the browser runs; **Refresh events** checks immediately. Updates are off by default. The bundled catalog and last valid download remain available offline.
 
-The discovery workflow collects public event leads from MLH, itch.io, BUET CSE announcements, and EventifyBD. Leads require review before appearing in the extension. This does not provide exhaustive or automatically verified coverage. Check each event's official source before registering or travelling; dates, eligibility, fees, and availability can change after the event's own verification date. A recent download does not mean that every event was recently verified. Events with unannounced dates are leads, not confirmed calendar appointments.
+The discovery workflow collects public event leads from MLH, itch.io, BUET CSE announcements, DIU Student Hub, and EventifyBD. Leads require review before appearing in the extension. The October 15 catalog contains 19 entries, including 17 with confirmed dates and two awaiting dates. This does not provide exhaustive or automatically verified coverage. Check each event's official source before registering or travelling; dates, eligibility, fees, and availability can change after the event's own verification date. A recent download does not mean that every event was recently verified. Events with unannounced dates are leads, not confirmed calendar appointments.
 
 Saved events, custom events, and preferences stay in the browser's local extension storage. There is no account or cloud synchronization of personal data. Reviewed date changes and cancellations update matching saved events and their reminders; personal events are preserved. Removed listings remain saved until you remove them. Calendar exports create `.ics` files containing event dates, known registration deadlines, and official hyperlinks. Previously exported files or imported calendar entries do not update automatically; export again after a schedule change.
 
@@ -24,7 +24,9 @@ The extension uses plain HTML, CSS, and JavaScript; no npm dependencies are need
 python scripts/package.py
 ```
 
-The build creates `dist/chromium` and `dist/firefox`. Run it again after source changes to update those folders.
+The build creates `dist/chromium` and `dist/firefox`, plus versioned ZIP archives in `dist/`. Run it again after source changes to update them. Archives contain only runtime files, with the browser-specific manifest at the root. These are development builds; the Firefox archive is unsigned and neither archive has been published to a browser store.
+
+GitHub Actions also packages both archives after successful checks. Open a successful **Catalog checks and discovery** run and download its **cse-radar-development-builds** artifact, retained for 14 days. Extract the Chromium ZIP before using **Load unpacked**. A GitHub sign-in may be needed to download workflow artifacts.
 
 ### Chrome, Edge, Brave, and other Chromium browsers
 
@@ -51,6 +53,8 @@ Times entered in the form use the selected IANA timezone, such as `Asia/Dhaka` o
 Open a saved personal event and choose **Edit personal event** to change its details or mark it cancelled. Editing preserves its identity and reschedules reminders; cancellation removes its pending reminders. Reviewed catalog entries continue to follow catalog updates.
 
 **Free entry only** includes explicit free or zero-price entries; an unknown fee does not count as free. Deadline filters can show known future cutoffs, cutoffs within 7 or 30 days, or exclude known closed registrations. Missing deadlines remain visible in the last option and do not count as confirmed open registration.
+
+**Any topic or skill** filters the explicit keywords attached to events, such as open source, Unity or algorithms. It combines with search, region, format and deadline filters. Add comma-separated **Topics** to your personal events and edit them later; import identity labels remain hidden. The menu shows up to 60 common topics, retaining the selected topic when a filter or catalog change leaves no matches. Reset filters clears the topic selection too.
 
 ## Import an organizer calendar
 
@@ -136,6 +140,8 @@ Set `RADAR_TEST_LIVE_FEED=1` to additionally download and validate the real publ
 
 Both browser checks passed in Chrome and desktop Brave, along with the core/background assertions. Brave testing verified loading the actual extension, its service worker, saved-event storage, event and deadline reminder alarms, switching reminders off, and the dashboard flows described above. System notification popups were not exercised. The Firefox package has been generated and inspected but has not been exercised in Firefox. Safari is not packaged.
 
+Microsoft Edge 155 also passed the actual extension, UI, toolbar capture and local-calendar-import checks in isolated profiles. Firefox is not installed in this test environment; its generated manifest and file references passed static review, while runtime compatibility remains unverified. Topic checks cover combined filtering, reset, saving and editing personal keywords, and hidden import identity labels.
+
 The capture integration check uses Brave's real toolbar action and `activeTab` grant with a local event fixture, without adding host permissions or simulating the capture API. It verifies explicit capture, unsaved draft review, exclusion of private form values, required-field completion, saving, personal edits and reminder replacement, planning filters, and draft expiry. Date-only coverage verifies inclusive review and editing, exclusive stored end dates, actual all-day calendar downloads, and no invented registration cutoff. This checks structured event fixtures rather than claiming successful extraction from every live event website.
 
 The calendar import check passed in Chrome and Brave using a real local file input and extension storage. It verifies no automatic saves or import network requests, date-only and named-timezone review, duplicate updates, reminder scheduling, a 320px dialog layout, accessible dialog names, calendar keyboard focus, and filter pressed states. Parser checks include folded Unicode text, safe URLs, malformed/oversized files, recurrence handling, and distinct long UIDs.
@@ -163,9 +169,12 @@ The data flow is: **public source listings → daily collection of unreviewed le
 | [MLH season listing](https://mlh.io/seasons/2027/events) | International hackathon leads from public structured event data. |
 | [itch.io upcoming jams](https://itch.io/jams/upcoming) | Game jam leads from a bounded set of public jam pages. |
 | [BUET CSE announcements](https://cse.buet.ac.bd/home/all_news) | Bangladesh university tech event leads; announcement dates are not treated as event dates. |
+| [DIU Student Hub](https://studentshub.daffodilvarsity.edu.bd/events) | Official university listing cards filtered for future technology events, with date precision and conflicting title years retained for review. |
 | [EventifyBD](https://eventifybd.com/) | Bangladesh technology event leads; aggregator details require organizer verification. |
 
 The EventifyBD adapter reads the anonymous `https://api.eventifybd.com/events` response used by its public calendar. This is a public frontend endpoint, not a documented supported API, and may change. Business-case competitions, unrelated activities, and clearly past listings are excluded. Reported dates and deadlines retain their precision and remain unverified until organizer review; provided external links are not automatically treated as official. Collection notes preserve EventifyBD listing attribution.
+
+The DIU adapter reads one anonymous public listing page without login or registration. It excludes unrelated activities, completed/cancelled entries and past date badges. It preserves dates without guessing a timezone or cutoff from displayed clock text. A title/date year mismatch is marked as a source conflict and requires organizer clarification before publication.
 
 Reviewed entries also cite organizers directly, including NASA Space Apps, MLH Global Hack Week, IUBAT/ICPC, hackCBS, Junction, and HackTheBurgh. These organizer links are provenance for reviewed entries; they are not all automatic collection adapters. The extension's source directory lists both kinds of source.
 
@@ -186,7 +195,7 @@ Community members can use **Event sources → Suggest an event** to open the Git
 
 1. Expand Bangladesh university coverage and add a maintainer review interface for collected leads.
 2. Expand structured event capture coverage and add clearer organizer verification guidance.
-3. Add eligibility and topic filters.
+3. Add verified eligibility filters and favorite-topic preferences.
 4. Expand Firefox testing and add Safari packaging.
 5. Add optional personal calendar synchronization with explicit consent.
 

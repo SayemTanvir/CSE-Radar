@@ -360,6 +360,127 @@ def parse_eventify(text, source, source_url, observed_at):
     return found, [], warnings
 
 
+class DIUCardParser(HTMLParser):
+    """Read only the visible club-card records on DIU Student Hub's events page."""
+    VOID_TAGS = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack, self.records, self.targets = [], [], []
+        self.card = None
+        self.card_depth = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = set(attrs.get('class', '').split())
+        if tag in self.VOID_TAGS:
+            return
+        self.stack.append(tag)
+        depth = len(self.stack)
+        if tag == 'div' and 'club-card' in classes and self.card is None:
+            self.card, self.card_depth = {}, depth
+        if self.card is None:
+            return
+        field = None
+        if 'event-date-badge' in classes:
+            field = 'date'
+        elif tag == 'h3':
+            field = 'title'
+        elif tag == 'p' and 'description' not in self.card:
+            field = 'description'
+        elif 'club-rating' in classes:
+            field = 'time'
+        elif 'event-status' in classes:
+            field = 'status'
+        elif 'club-type-badge' in classes and 'location' not in self.card:
+            field = 'location'
+        if field:
+            self.card.setdefault(field, [])
+            self.targets.append((depth, tag, field))
+        if tag == 'a' and 'btn-details' in classes:
+            self.card['url'] = attrs.get('href', '')
+
+    def handle_data(self, text):
+        if self.card is not None:
+            for _, _, field in self.targets:
+                self.card[field].append(text)
+
+    def handle_endtag(self, tag):
+        if tag not in self.stack:
+            return
+        depth = len(self.stack) - self.stack[::-1].index(tag)
+        self.targets = [target for target in self.targets if target[0] < depth]
+        if self.card is not None and depth == self.card_depth and tag == 'div':
+            self.records.append({key: clean(''.join(value)) if isinstance(value, list) else value
+                                 for key, value in self.card.items()})
+            self.card, self.card_depth = None, None
+            self.targets = []
+        self.stack = self.stack[:depth - 1]
+
+
+def diu_card_date(value):
+    """Parse the source's English event badge date; preserve date-only precision."""
+    match = re.fullmatch(r'([A-Za-z]{3}) (\d{1,2}), (\d{4})', clean(value))
+    if not match:
+        return None
+    months = {name: index + 1 for index, name in enumerate(
+        ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'])}
+    month = months.get(match[1])
+    if month is None:
+        return None
+    return event_date(f'{int(match[3]):04d}-{month:02d}-{int(match[2]):02d}')
+
+
+def parse_diu_events(text, source, source_url, observed_at):
+    page = DIUCardParser()
+    page.feed(text)
+    today = datetime.fromisoformat(observed_at.replace('Z', '+00:00')).astimezone(timezone(timedelta(hours=6))).date().isoformat()
+    found = []
+    counts = {'total': len(page.records), 'unrelated': 0, 'past': 0, 'invalid': 0, 'retained': 0}
+    for record in page.records:
+        title, description = record.get('title', ''), record.get('description', '')
+        technology = TECH_TERMS.search(title + ' ' + description) or re.search(r'bug bounty|ethical hacker|embedded systems|malware', title + ' ' + description, re.IGNORECASE)
+        if not technology or UNRELATED_TERMS.search(title):
+            counts['unrelated'] += 1
+            continue
+        start = diu_card_date(record.get('date', ''))
+        if record.get('status', '').casefold() in ('completed', 'cancelled', 'canceled') or (start and start < today):
+            counts['past'] += 1
+            continue
+        try:
+            url = allowed_url(urljoin(source_url, record.get('url', '')), source['allowedHosts'])
+            if not re.fullmatch(r'/event/[0-9]+/home', urlsplit(url).path):
+                raise ValueError('Not a public DIU event detail link')
+        except ValueError:
+            counts['invalid'] += 1
+            continue
+        category, _ = eventify_category({'event_type': 'Others', 'event_title': title, 'description': description})
+        notes = ['Official university event listing lead; participation rules and dates still require human review.',
+                 'Only the first public listing page is read; summary may be truncated. No account or registration page is accessed.',
+                 'Event badge is date-only. Displayed clock time has no verified timezone and is retained as source text only.']
+        title_years = re.findall(r'\b(?:19|20)\d{2}\b', title)
+        if start and title_years and start[:4] not in title_years:
+            notes.append('SOURCE CONFLICT: title year differs from event date badge year; confirm with organizer before publishing.')
+        candidate = make_candidate({'title': title, 'url': url, 'start': start,
+                                    'description': description, 'category': category,
+                                    'organizer': 'Daffodil International University (listing host; individual organizer requires review)',
+                                    'notes': notes}, source, source_url, observed_at)
+        if candidate:
+            candidate.update({'sourceKind': 'university-listing', 'sourceListingUrl': source_url,
+                              'sourceReportedDate': record.get('date') or None,
+                              'sourceReportedTime': record.get('time') or None,
+                              'sourceListingStatus': record.get('status') or None,
+                              'location': record.get('location') or None})
+            found.append(candidate)
+            counts['retained'] += 1
+        else:
+            counts['invalid'] += 1
+    warnings = ['DIU Student Hub card counts (before deduplication/limit): ' + json.dumps(counts, sort_keys=True)]
+    if not page.records:
+        warnings.append('No recognizable event cards; listing markup may have changed.')
+    return found, [], warnings
+
+
 def collect(config, fetcher=fetch, observed_at=None):
     observed_at = observed_at or datetime.now(timezone.utc).isoformat(timespec='seconds')
     candidates, reports = {}, []
@@ -393,7 +514,9 @@ def collect(config, fetcher=fetch, observed_at=None):
                 if len(text.encode('utf-8')) > MAX_BYTES:
                     raise ValueError('Response exceeds 1 MiB limit')
                 report['fetchedPages'] += 1
-                parser = parse_eventify if source.get('adapter') == 'eventifybd' else parse_feed if source.get('format') in ('rss', 'atom') and url == source['url'] else parse_html
+                parser = {'eventifybd': parse_eventify, 'diu-events': parse_diu_events}.get(source.get('adapter'))
+                if parser is None:
+                    parser = parse_feed if source.get('format') in ('rss', 'atom') and url == source['url'] else parse_html
                 items, links, warnings = parser(text, {**source, '_linkTitle': link_title}, final_url, observed_at)
                 report['warnings'].extend(warnings)
                 for item in items:
