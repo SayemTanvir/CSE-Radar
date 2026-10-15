@@ -369,7 +369,7 @@
       deadline: parseDate('deadline'), timezone: value('timezone'),
       eligibility: value('eligibility') || 'Check the organizer’s rules', fee: value('fee') || 'Check the official event page',
       description: value('description') || 'Personal event added by you. Check the official organizer for complete details.',
-      url: value('url'), registrationUrl: value('registrationUrl') || null, sourceUrl: formContext.sourceUrl || value('url'), lastChecked: dayKey(Date.now(), 'Asia/Dhaka'), status: value('status'), tags
+      url: value('url'), registrationUrl: value('registrationUrl') || null, sourceUrl: value('sourceUrl') || value('url'), lastChecked: dayKey(Date.now(), 'Asia/Dhaka'), status: value('status'), tags
     });
     if (!editId && Date.parse(event.end) <= Date.now()) throw new Error('Please add an event that has not ended yet.');
     if (event.deadline && Date.parse(event.deadline) > Date.parse(event.end)) throw new Error('The registration deadline cannot be after the event ends.');
@@ -415,7 +415,7 @@
     setDateMode(event?.allDay === true);
     if (event) {
       form.elements.namedItem('topics').value = topicTags(event).join(', ');
-      for (const key of ['title', 'organizer', 'category', 'url', 'registrationUrl', 'country', 'city', 'mode', 'fee', 'eligibility', 'description', 'status']) form.elements.namedItem(key).value = event[key] || '';
+      for (const key of ['title', 'organizer', 'category', 'url', 'sourceUrl', 'registrationUrl', 'country', 'city', 'mode', 'fee', 'eligibility', 'description', 'status']) form.elements.namedItem(key).value = event[key] || '';
       form.elements.namedItem('start').value = !event.start ? '' : event.allDay ? event.start.slice(0, 10) : RadarPlanning.localParts(event.start, event.timezone);
       form.elements.namedItem('end').value = !event.end ? '' : event.allDay ? RadarPlanning.shiftDay(event.end.slice(0, 10), -1) : RadarPlanning.localParts(event.end, event.timezone);
       form.elements.namedItem('deadline').value = event.deadline ? RadarPlanning.localParts(event.deadline, event.timezone) : '';
@@ -431,7 +431,8 @@
     formContext.draftId = options.draftId || null;
     formContext.tags = [...new Set([...(existing?.tags || []), ...(options.tags || ['page capture'])])].slice(-20);
     const pageSource = RadarCore.safeUrl(options.pageUrl);
-    formContext.sourceUrl = pageSource || RadarCore.safeUrl(candidate.url) || existing?.sourceUrl || null;
+    formContext.sourceUrl = pageSource || existing?.sourceUrl || RadarCore.safeUrl(candidate.url) || null;
+    form.elements.namedItem('sourceUrl').value = formContext.sourceUrl || '';
     $('#add-heading').textContent = options.heading || 'Review captured event';
     $('#add-intro').textContent = existing ? 'This event is already saved. Review this calendar update before replacing its details and rescheduling reminders.' : 'Confirm or correct these details before adding the event to your calendar.';
     $('#capture-review-notice').hidden = false;
@@ -530,6 +531,24 @@
     $('#reminder-select').value = String(state.reminderHours);
     $('#settings-dialog').showModal();
   }
+  async function testNotification() {
+    if (!api) return;
+    const button = $('#test-notification'); button.disabled = true;
+    try {
+      const permission = typeof api.notifications.getPermissionLevel === 'function' ? await api.notifications.getPermissionLevel() : 'granted';
+      if (permission !== 'granted') {
+        $('#notification-status').textContent = 'Notifications are blocked. Allow notifications for CSE Radar in your browser and system settings, then try again.';
+        return;
+      }
+      await api.notifications.create('radar:test', {
+        type: 'basic', iconUrl: api.runtime.getURL('icons/radar-128.png'),
+        title: 'CSE Radar test reminder',
+        message: 'Your test reminder was sent. Keep this browser running to receive reminders for saved events. Click to open your Radar calendar.'
+      });
+      $('#notification-status').textContent = 'Test notification sent. If it did not appear, check your system notification settings and Do Not Disturb mode.';
+    } catch (_) { $('#notification-status').textContent = 'The test notification could not be sent. Check browser notification permissions and try again.'; }
+    finally { button.disabled = false; }
+  }
   function selectCatalog() {
     const cached = state.cachedCatalog;
     const selected = cached && (!catalog || cached.updatedAt >= catalog.updatedAt) ? cached : catalog;
@@ -586,6 +605,8 @@
     const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!['Asia/Dhaka', 'UTC'].includes(localZone)) $('#timezone-select').append(new Option(`Device (${localZone})`, localZone));
     updateInputZone();
+    $('#test-notification').disabled = preview;
+    if (preview) $('#notification-status').textContent = 'Test notifications are available in the installed extension.';
     try { hydrate(await readStorage()); } catch (error) { toast('Saved events could not be read. Check browser storage settings.'); console.error(error); }
     if (![...$('#timezone-select').options].some(option => option.value === state.zone)) $('#timezone-select').append(new Option(state.zone, state.zone));
     state.month = todayKey().slice(0, 7); state.day = todayKey();
@@ -640,6 +661,7 @@
     $('#all-day-toggle').addEventListener('change', event => setDateMode(event.target.checked));
     $('#add-form').elements.namedItem('timezone').addEventListener('input', updateInputZone);
     $('#settings-open').addEventListener('click', openSettings);
+    $('#test-notification').addEventListener('click', () => run(testNotification));
     $('#feed-manage').addEventListener('click', openSettings);
     $('#feed-enable').addEventListener('click', () => run(toggleFeed));
     $('#feed-refresh').addEventListener('click', () => run(refreshFeed));

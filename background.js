@@ -4,6 +4,10 @@ const extensionAPI = typeof browser !== 'undefined' ? browser : chrome;
 const DAILY_ALARM = 'radar:reconcile';
 const FEED_ALARM = 'radar:feed';
 const REMINDER_PREFIX = 'radar:reminder:';
+// Chromium permits 500 active alarms. Keep room for maintenance and draft
+// expiry; the next pending reminders enter this queue after each delivery.
+const MAX_REMINDER_ALARMS = 490;
+const DRAFT_ALARM = 'radar:drafts';
 const DRAFT_TTL = 24 * 60 * 60 * 1000;
 const DRAFT_ERROR = 'This captured event draft is unavailable or expired. Capture the page again.';
 let workQueue = Promise.resolve();
@@ -22,13 +26,25 @@ async function reconcile() {
   const now = Date.now();
   const plan = RadarCore.reminderPlan(events, stored.radarReminderHours ?? 24, now);
   const delivered = stored.radarDelivered && typeof stored.radarDelivered === 'object' ? stored.radarDelivered : {};
-  const wanted = new Map(plan.filter(entry => !delivered[entry.key]).map(entry => [REMINDER_PREFIX + entry.key, entry]));
+  const pending = plan.filter(entry => !delivered[entry.key])
+    .sort((left, right) => left.when - right.when || left.target - right.target || left.key.localeCompare(right.key))
+    .slice(0, MAX_REMINDER_ALARMS);
+  const wanted = new Map(pending.map(entry => [REMINDER_PREFIX + entry.key, entry]));
   const existing = await extensionAPI.alarms.getAll();
+  const existingByName = new Map(existing.map(alarm => [alarm.name, alarm]));
   for (const alarm of existing) {
     if (alarm.name.startsWith(REMINDER_PREFIX) && !wanted.has(alarm.name)) await extensionAPI.alarms.clear(alarm.name);
   }
-  for (const [name, entry] of wanted) await extensionAPI.alarms.create(name, { when: entry.when });
-  await extensionAPI.alarms.create(DAILY_ALARM, { periodInMinutes: 1440 });
+  for (const [name, entry] of wanted) {
+    const alarm = existingByName.get(name);
+    // Recreating a catch-up alarm on every delivery would continually postpone
+    // other overdue reminders. Keep an existing earlier catch-up time, while
+    // still honoring preference changes that move a reminder into the future.
+    if (alarm && (alarm.scheduledTime === entry.when ||
+      (entry.when === now + 1000 && Number.isFinite(alarm.scheduledTime) && alarm.scheduledTime <= entry.when))) continue;
+    await extensionAPI.alarms.create(name, { when: entry.when });
+  }
+  if (existingByName.get(DAILY_ALARM)?.periodInMinutes !== 1440) await extensionAPI.alarms.create(DAILY_ALARM, { periodInMinutes: 1440 });
   // Keep only delivery markers for targets still represented in the saved list.
   const currentKeys = new Set(RadarCore.reminderPlan(events, 24, now).map(entry => entry.key));
   const retained = Object.fromEntries(Object.entries(delivered).filter(([key]) => currentKeys.has(key)));
@@ -50,6 +66,7 @@ async function deliver(alarm) {
   });
   delivered[key] = Date.now();
   await extensionAPI.storage.local.set({ radarDelivered: delivered });
+  await reconcile();
 }
 extensionAPI.action.onClicked.addListener(() => extensionAPI.tabs.create({ url: extensionAPI.runtime.getURL('dashboard.html') }));
 function bundledCatalog() {
@@ -169,7 +186,12 @@ async function pruneDrafts() {
     } catch (_) { return []; }
   }).sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
   if (JSON.stringify(drafts) !== JSON.stringify(radarDrafts || [])) await extensionAPI.storage.local.set({ radarDrafts: drafts });
+  await scheduleDraftExpiry(drafts);
   return drafts;
+}
+async function scheduleDraftExpiry(drafts) {
+  if (drafts.length) await extensionAPI.alarms.create(DRAFT_ALARM, { when: Math.min(...drafts.map(draft => draft.createdAt)) + DRAFT_TTL });
+  else await extensionAPI.alarms.clear(DRAFT_ALARM);
 }
 async function draftMessage(message) {
   let drafts = await pruneDrafts();
@@ -179,11 +201,14 @@ async function draftMessage(message) {
     const draft = { id, createdAt: Date.now(), ...capture };
     drafts = [draft, ...drafts].slice(0, 10);
     await extensionAPI.storage.local.set({ radarDrafts: drafts });
+    await scheduleDraftExpiry(drafts);
     return { ok: true, id, url: extensionAPI.runtime.getURL('dashboard.html') + '?draft=' + id };
   }
   if (typeof message.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(message.id)) throw new Error(DRAFT_ERROR);
   if (message.type === 'radar:draft:delete') {
-    await extensionAPI.storage.local.set({ radarDrafts: drafts.filter(draft => draft.id !== message.id) });
+    const retained = drafts.filter(draft => draft.id !== message.id);
+    await extensionAPI.storage.local.set({ radarDrafts: retained });
+    await scheduleDraftExpiry(retained);
     return { ok: true };
   }
   const draft = drafts.find(item => item.id === message.id);
@@ -221,10 +246,16 @@ if (extensionAPI.permissions && extensionAPI.permissions.onRemoved) extensionAPI
   await feedSchedule();
 }));
 extensionAPI.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === DAILY_ALARM || alarm.name === FEED_ALARM) serial(refreshCatalog);
+  if (alarm.name === DRAFT_ALARM) serial(pruneDrafts);
+  else if (alarm.name === DAILY_ALARM || alarm.name === FEED_ALARM) serial(refreshCatalog);
   else if (alarm.name.startsWith(REMINDER_PREFIX)) serial(() => deliver(alarm));
 });
 extensionAPI.notifications.onClicked.addListener(id => serial(async () => {
+  if (id === 'radar:test') {
+    await extensionAPI.tabs.create({ url: extensionAPI.runtime.getURL('dashboard.html') });
+    await extensionAPI.notifications.clear(id);
+    return;
+  }
   if (!id.startsWith(REMINDER_PREFIX)) return;
   const key = id.slice(REMINDER_PREFIX.length);
   const { radarSaved } = await extensionAPI.storage.local.get('radarSaved');

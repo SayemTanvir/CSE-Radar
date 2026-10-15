@@ -17,7 +17,7 @@ import uuid
 
 import websockets
 
-from ui_smoke import ARTIFACTS, CDP, CHROME, ROOT, wait_debug_port
+from ui_smoke import ARTIFACTS, CDP, CHROME, ROOT, wait_debug_port, stop_browser
 
 PRIVATE_VALUE = 'PRIVATE-FORM-VALUE-DO-NOT-CAPTURE'
 EVENT = {
@@ -85,12 +85,12 @@ async def exercise(port, fixture_url):
         async with websockets.connect(popup_target['webSocketDebuggerUrl']) as popup_socket:
             popup = CDP(popup_socket)
             await popup.call('Runtime.enable')
-            await popup.wait("document.querySelector('#save-page') !== null")
+            await popup.wait("document.readyState==='complete' && document.querySelector('#save-page') !== null")
             # Opening the toolbar does not scan or save the page automatically.
             assert not await popup.evaluate("chrome.storage.local.get('radarSaved').then(s=>s.radarSaved?.length>0)")
             assert not await popup.evaluate("chrome.permissions.contains({origins:['http://127.0.0.1/*']})")
             await popup.evaluate("document.querySelector('#save-page').click()")
-            await popup.wait("document.querySelector('#review-draft') && !document.querySelector('#review-draft').disabled")
+            await popup.wait("!document.querySelector('#draft-options').hidden && document.querySelector('#candidate-select').options.length>0 && !document.querySelector('#review-draft').disabled")
             assert await popup.evaluate("document.body.textContent.includes('Captured student hackathon')")
             await popup.screenshot('capture-popup.png')
             await popup.evaluate("document.querySelector('#review-draft').click()")
@@ -164,8 +164,8 @@ async def exercise(port, fixture_url):
         # Date-only source fields stay dates in review. A registration date is
         # not an exact cutoff, so it must never silently schedule a deadline.
         date_only_capture = {
-            'pageUrl': 'https://example.org/date-only-fest',
-            'sourcePageUrl': 'https://example.org/date-only-fest',
+            'pageUrl': 'https://example.org/date-only-fest?invitation=PRIVATE-SOURCE-TOKEN',
+            'sourcePageUrl': 'https://example.org/date-only-fest?invitation=PRIVATE-SOURCE-TOKEN',
             'pageTitle': 'University date-only fest', 'capturedAt': '2030-01-01T00:00:00Z',
             'candidates': [{**draft_result['draft']['candidate'], 'title': 'Date-only university fest',
                             'url': 'https://example.org/date-only-fest', 'category': 'fest',
@@ -182,11 +182,12 @@ async def exercise(port, fixture_url):
         assert await page.evaluate("document.querySelector('#add-form').elements.namedItem('start').value") == '2030-03-20'
         assert await page.evaluate("document.querySelector('#add-form').elements.namedItem('end').value") == '2030-03-21'
         assert await page.evaluate("document.querySelector('#add-form').elements.namedItem('deadline').value") == ''
+        assert await page.evaluate("document.querySelector('#add-form').elements.namedItem('sourceUrl').value") == 'https://example.org/date-only-fest?invitation=PRIVATE-SOURCE-TOKEN'
         assert await page.evaluate("document.querySelector('#capture-warnings').textContent.includes('2030-03-15') && document.querySelector('#capture-warnings').textContent.includes('without an exact cutoff time')")
         assert await page.evaluate("chrome.storage.local.get('radarSaved').then(s=>s.radarSaved.length)") == 1
         await page.evaluate("""
             (()=>{const form=document.querySelector('#add-form');
-            for(const [name,value] of Object.entries({timezone:'Asia/Dhaka',mode:'in-person',country:'Bangladesh',eligibility:'University students'})) form.elements.namedItem(name).value=value;
+            for(const [name,value] of Object.entries({timezone:'Asia/Dhaka',mode:'in-person',country:'Bangladesh',eligibility:'University students',sourceUrl:'https://example.org/date-only-fest'})) form.elements.namedItem(name).value=value;
             form.requestSubmit();})()
         """)
         await page.wait("!document.querySelector('#add-dialog').open && document.querySelector('#saved-count').textContent==='2'")
@@ -194,6 +195,8 @@ async def exercise(port, fixture_url):
         assert date_event['allDay'] and date_event['start'] == '2030-03-20T00:00:00+06:00', date_event
         assert date_event['end'] == '2030-03-22T00:00:00+06:00', date_event
         assert date_event['deadline'] is None, date_event
+        assert date_event['sourceUrl'] == 'https://example.org/date-only-fest', date_event
+        assert 'PRIVATE-SOURCE-TOKEN' not in await page.evaluate("chrome.storage.local.get(null).then(s=>JSON.stringify(s))")
         await page.wait("chrome.alarms.getAll().then(a=>a.filter(x=>x.name.startsWith('radar:reminder:' + " + json.dumps(date_event['id']) + ")).length===1)")
 
         export_dir = ARTIFACTS / ('capture-export-' + uuid.uuid4().hex)
@@ -211,6 +214,7 @@ async def exercise(port, fixture_url):
         assert 'DTSTART;VALUE=DATE:20300320' in date_entry, date_entry
         assert 'DTEND;VALUE=DATE:20300322' in date_entry, date_entry
         assert date_event['id'] + '-deadline@' not in ics, ics
+        assert 'PRIVATE-SOURCE-TOKEN' not in ics, ics
         assert export_dir.resolve().is_relative_to(ARTIFACTS.resolve())
         shutil.rmtree(export_dir)
 
@@ -242,8 +246,7 @@ def main():
     try:
         asyncio.run(exercise(wait_debug_port(profile, browser), f'http://127.0.0.1:{server.server_port}/event'))
     finally:
-        browser.terminate()
-        browser.wait(timeout=15)
+        stop_browser(browser)
         server.shutdown()
         assert profile.resolve().is_relative_to(ARTIFACTS.resolve())
         shutil.rmtree(profile, ignore_errors=True)

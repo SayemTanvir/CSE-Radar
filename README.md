@@ -4,15 +4,19 @@ Find your next tech event. Never miss registration.
 
 CSE Radar is a browser extension for discovering CSE opportunities in Bangladesh and around the world: hackathons, game jams, programming contests, university tech fests, and other technology events. It brings event details, official hyperlinks, registration deadlines, and calendar planning together.
 
+Desktop release scope: **Chrome, Brave, Microsoft Edge, and Firefox**. See [release verification](docs/RELEASE-VERIFICATION.md), [privacy](docs/PRIVACY.md), [support](docs/SUPPORT.md), and [store submission materials](docs/STORE-LISTING.md). Source code is available under the [MIT license](LICENSE). Browser-store review and signing are separate from completing and testing the application; no store availability is claimed until a listing is live.
+
 ## Current scope
 
-Version 0.5 includes a **reviewed event catalog with optional updates**, reviewed capture from the current event page, local calendar import, editable personal events, and topic, free-entry and registration-deadline filters. Enable **Preferences → Enable event updates** to download new catalog editions from this repository without reinstalling. The extension checks every six hours while the browser runs; **Refresh events** checks immediately. Updates are off by default. The bundled catalog and last valid download remain available offline.
+Version 1.0 includes a **reviewed event catalog with optional updates**, reviewed capture from the current event page, local calendar import, editable personal events, and topic, free-entry and registration-deadline filters. Enable **Preferences → Enable event updates** to download new catalog editions from this repository without reinstalling. The extension checks every six hours while the browser runs; **Refresh events** checks immediately. Updates are off by default. The bundled catalog and last valid download remain available offline.
 
 The discovery workflow collects public event leads from MLH, itch.io, BUET CSE announcements, DIU Student Hub, and EventifyBD. Leads require review before appearing in the extension. The October 15 catalog contains 19 entries, including 17 with confirmed dates and two awaiting dates. This does not provide exhaustive or automatically verified coverage. Check each event's official source before registering or travelling; dates, eligibility, fees, and availability can change after the event's own verification date. A recent download does not mean that every event was recently verified. Events with unannounced dates are leads, not confirmed calendar appointments.
 
 Saved events, custom events, and preferences stay in the browser's local extension storage. There is no account or cloud synchronization of personal data. Reviewed date changes and cancellations update matching saved events and their reminders; personal events are preserved. Removed listings remain saved until you remove them. Calendar exports create `.ics` files containing event dates, known registration deadlines, and official hyperlinks. Previously exported files or imported calendar entries do not update automatically; export again after a schedule change.
 
 Browser reminders require the browser to be running and notifications to be allowed by the browser and operating system. Suspended devices can delay reminders. Use calendar export if you want your calendar provider to manage notifications independently of the extension.
+
+Use **Preferences → Send test notification** to check your setup. A success message means the browser accepted the request; system settings can still hide its popup. Large calendars schedule the earliest 490 pending reminders, then automatically refill the queue as reminders are delivered. Existing alarms keep their schedule during unrelated updates, and cancellations or edited times remove obsolete alarms.
 
 Some organizers publish only event dates. These entries are shown and exported as all-day events, without claiming an exact start time. Their reminders use the beginning of the listed date in the source timezone as a planning reference (UTC for the initial date-only entries); check the organizer's schedule for actual attendance times. Registration deadlines are scheduled only when a verified deadline is available.
 
@@ -24,7 +28,7 @@ The extension uses plain HTML, CSS, and JavaScript; no npm dependencies are need
 python scripts/package.py
 ```
 
-The build creates `dist/chromium` and `dist/firefox`, plus versioned ZIP archives in `dist/`. Run it again after source changes to update them. Archives contain only runtime files, with the browser-specific manifest at the root. These are development builds; the Firefox archive is unsigned and neither archive has been published to a browser store.
+The build creates `dist/chromium` and `dist/firefox`, versioned ZIP archives, and `SHA256SUMS-1.0.0.txt` in `dist/`. Run it again after source changes to update them. Archives contain runtime files and the MIT license, with the browser-specific manifest at the root. Extra repository/test/discovery files are excluded. Packaging checks verify this boundary and repeatable archive hashes. The Firefox archive is unsigned until Mozilla signs it; these packages have not yet been published to a browser store.
 
 GitHub Actions also packages both archives after successful checks. Open a successful **Catalog checks and discovery** run and download its **cse-radar-development-builds** artifact, retained for 14 days. Extract the Chromium ZIP before using **Load unpacked**. A GitHub sign-in may be needed to download workflow artifacts.
 
@@ -117,6 +121,7 @@ With Node.js installed, run:
 ```sh
 node --test tests/core.test.js tests/feed.test.js tests/catalog_data.test.js tests/planning.test.js tests/capture.test.js tests/calendar_import.test.js
 python -m unittest discover -s tests -p test_collection.py
+python -m unittest discover -s tests -p test_package.py
 ```
 
 The checks cover event validation, calendar timezone handling, reminder planning and delivery deduplication, feed opt-in, invalid/offline/oversized updates, rollback protection, concurrent saves and refreshes, cancellation propagation, bounded source extraction, capture bounds and draft expiry, explicit free-entry and deadline filters, and daylight-saving ambiguities in personal-event times. Reviewed catalog and source registry checks also run in CI. Browser notification permissions still need manual checking on each operating system.
@@ -130,17 +135,29 @@ python tests/catalog_smoke.py
 python tests/responsive_smoke.py
 python tests/capture_smoke.py
 python tests/import_smoke.py
+python tests/restart_smoke.py
 ```
 
-The UI check covers search, region filters, event links, saved-event persistence, custom form validation, all-day timezone behavior, preferences, combined calendar export, source listings, and narrow-screen layout. It saves preview images in `artifacts/`. The extension check loads `dist/chromium` into a recent Chrome via its experimental extension debugging API and verifies its actual service worker and reminder alarms. It does not display a system notification. Set `RADAR_TEST_BROWSER` if Chrome is installed elsewhere. The default test browser path is for Windows.
+The UI check covers search, region filters, event links, saved-event persistence, custom form validation, all-day timezone behavior, preferences, combined calendar export, source listings, and narrow-screen layout. It saves preview images in `artifacts/`. The extension check loads `dist/chromium` into a recent Chrome via its experimental extension debugging API and verifies its actual service worker and reminder alarms. It verifies actual test-notification API creation; OS visibility is not visually asserted. Set `RADAR_TEST_BROWSER` if Chrome is installed elsewhere. The default test browser path is for Windows.
 
 The catalog integration check uses actual extension storage, UI, and reminder alarms, with explicitly simulated download responses and granted permission for deterministic tests. It verifies opt-out, caching, offline/invalid fallback, date changes, cancellations, and preservation of personal entries. These fixtures do not represent a live network end-to-end test.
 
 Set `RADAR_TEST_LIVE_FEED=1` to additionally download and validate the real public GitHub feed during the catalog check. That path has also passed in Brave. The permission facade is still simulated, so the browser's interactive permission prompt is not covered.
 
-Both browser checks passed in Chrome and desktop Brave, along with the core/background assertions. Brave testing verified loading the actual extension, its service worker, saved-event storage, event and deadline reminder alarms, switching reminders off, and the dashboard flows described above. System notification popups were not exercised. The Firefox package has been generated and inspected but has not been exercised in Firefox. Safari is not packaged.
+Chrome and Brave passed the actual extension, UI, toolbar capture and local-calendar-import checks, along with the core/background assertions. Testing covers loading the extension, its service worker, local saved storage, event/deadline reminder alarms, reminders off, and accepted notification creation. OS popup visibility is not visually asserted. Safari is outside this release.
 
-Microsoft Edge 155 also passed the actual extension, UI, toolbar capture and local-calendar-import checks in isolated profiles. Firefox is not installed in this test environment; its generated manifest and file references passed static review, while runtime compatibility remains unverified. Topic checks cover combined filtering, reset, saving and editing personal keywords, and hidden import identity labels.
+Microsoft Edge 155 passed the same actual extension, UI, toolbar capture and local-calendar-import checks in isolated profiles. Firefox 158 passed a real runtime suite using an official, workspace-only Firefox binary and geckodriver, with the Firefox ZIP temporarily installed rather than a replacement browser API. Checks include genuine toolbar capture, private-form exclusion, required draft review, personal saves/edits, persistence, reminders, actual notification creation, and calendar import/export. Topic checks cover combined filtering, reset, saving and editing personal keywords, and hidden import identity labels.
+
+To repeat Firefox checks, provide official executable paths without changing your normal browser profile:
+
+```powershell
+$env:RADAR_TEST_FIREFOX = 'C:\path\to\firefox.exe'
+$env:RADAR_TEST_GECKODRIVER = 'C:\path\to\geckodriver.exe'
+python scripts/package.py
+python tests/firefox_smoke.py
+```
+
+The Firefox runner uses privileged WebDriver access only to operate its isolated browser's real toolbar and permission dialogs. It does not override extension APIs or grant host permissions through a facade. Headless notification acceptance does not establish visual OS delivery. See the dated evidence and remaining manual/account steps in [release verification](docs/RELEASE-VERIFICATION.md) and the [release checklist](docs/RELEASE-CHECKLIST.md).
 
 The capture integration check uses Brave's real toolbar action and `activeTab` grant with a local event fixture, without adding host permissions or simulating the capture API. It verifies explicit capture, unsaved draft review, exclusion of private form values, required-field completion, saving, personal edits and reminder replacement, planning filters, and draft expiry. Date-only coverage verifies inclusive review and editing, exclusive stored end dates, actual all-day calendar downloads, and no invented registration cutoff. This checks structured event fixtures rather than claiming successful extraction from every live event website.
 
@@ -196,7 +213,7 @@ Community members can use **Event sources → Suggest an event** to open the Git
 1. Expand Bangladesh university coverage and add a maintainer review interface for collected leads.
 2. Expand structured event capture coverage and add clearer organizer verification guidance.
 3. Add verified eligibility filters and favorite-topic preferences.
-4. Expand Firefox testing and add Safari packaging.
+4. Explore Safari packaging and separately scoped mobile support after the desktop release.
 5. Add optional personal calendar synchronization with explicit consent.
 
 The repository and scheduled collection workflow provide the initial shared publishing pipeline. They cannot discover every event, particularly announcements available only as images, private group posts, or inaccessible pages.

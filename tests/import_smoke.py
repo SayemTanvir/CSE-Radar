@@ -12,7 +12,7 @@ import uuid
 
 import websockets
 
-from ui_smoke import ARTIFACTS, CDP, CHROME, ROOT, wait_debug_port
+from ui_smoke import ARTIFACTS, CDP, CHROME, ROOT, wait_debug_port, stop_browser
 
 CALENDAR = '\r\n'.join([
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Local test//EN',
@@ -149,8 +149,7 @@ def main():
     try:
         asyncio.run(exercise(wait_debug_port(profile, browser), fixture))
     finally:
-        browser.terminate()
-        browser.wait(timeout=15)
+        stop_browser(browser)
         assert profile.resolve().is_relative_to(ARTIFACTS.resolve())
         shutil.rmtree(profile, ignore_errors=True)
 

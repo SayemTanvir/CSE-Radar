@@ -14,7 +14,7 @@ import uuid
 
 import websockets
 
-from ui_smoke import CDP, CHROME, ROOT, ARTIFACTS, wait_debug_port
+from ui_smoke import CDP, CHROME, ROOT, ARTIFACTS, wait_debug_port, stop_browser
 
 
 async def exercise(port):
@@ -40,6 +40,11 @@ async def exercise(port):
         await page.wait("document.querySelectorAll('.event-card').length > 0")
         assert await page.evaluate("document.querySelector('#catalog-status').textContent.includes('Browser preview')") is False
         assert await page.evaluate('chrome.runtime.id') == extension_id
+        await page.evaluate("document.querySelector('#settings-open').click(); document.querySelector('#test-notification').click()")
+        await page.wait("document.querySelector('#notification-status').textContent.startsWith('Test notification sent.')")
+        assert await page.evaluate("chrome.notifications.getPermissionLevel()") == 'granted'
+        assert await page.evaluate("chrome.notifications.getAll().then(n=>Object.hasOwn(n,'radar:test'))")
+        await page.evaluate("chrome.notifications.clear('radar:test'); document.querySelector('[data-close=\"settings-dialog\"]').click()")
         # Exercise the UI's serialized background save/remove API, not only
         # direct storage writes used by the reminder fixture below.
         await page.evaluate("document.querySelector('.save-button').click()")
@@ -57,7 +62,7 @@ async def exercise(port):
         await page.wait("!document.querySelector('#add-dialog').open && document.querySelector('#saved-count').textContent === '1'")
         assert await page.evaluate("chrome.storage.local.get('radarSaved').then(s=>s.radarSaved[0].title==='Brave UI personal event' && s.radarSaved[0].id.startsWith('custom-'))")
         # Add a real future record through extension storage, then inspect the
-        # actual service worker's alarms. This does not show a notification.
+        # actual service worker's alarms. Event reminders are not delivered here.
         await page.evaluate("""
             (async () => {
                 const seed=(await (await fetch('data/events.json')).json()).events.find(e=>e.start);
@@ -86,7 +91,7 @@ async def exercise(port):
         await worker.call('Runtime.enable')
         assert await worker.evaluate('chrome.runtime.id') == extension_id
         assert await worker.evaluate("chrome.alarms.getAll().then(a=>a.some(x=>x.name==='radar:reconcile'))")
-    print('PASS unpacked Chromium extension: manifest, worker, CSP dashboard, UI save/remove/custom via background queue, reload persistence, event/deadline alarms, reminders off.')
+    print('PASS unpacked Chromium extension: manifest, worker, CSP dashboard, actual test-notification API, UI save/remove/custom via background queue, reload persistence, event/deadline alarms, reminders off. OS display is not visually asserted.')
 
 
 def main():
@@ -98,8 +103,7 @@ def main():
     try:
         asyncio.run(exercise(wait_debug_port(profile, browser)))
     finally:
-        browser.terminate()
-        browser.wait(timeout=15)
+        stop_browser(browser)
         assert profile.resolve().is_relative_to(ARTIFACTS.resolve())
         shutil.rmtree(profile, ignore_errors=True)
 

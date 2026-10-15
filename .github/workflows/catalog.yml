@@ -27,6 +27,7 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - run: python -m unittest discover -s tests -p test_collection.py
+      - run: python -m unittest discover -s tests -p test_package.py
       - run: node --test tests/core.test.js tests/feed.test.js tests/catalog_data.test.js tests/planning.test.js tests/capture.test.js tests/calendar_import.test.js
       - name: Package development builds
         run: python scripts/package.py
@@ -34,7 +35,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: cse-radar-development-builds-${{ github.sha }}
-          path: dist/cse-radar-*.zip
+          path: |
+            dist/cse-radar-*.zip
+            dist/SHA256SUMS-*.txt
           retention-days: 14
           if-no-files-found: error
 

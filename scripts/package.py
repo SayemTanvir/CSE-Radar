@@ -5,6 +5,7 @@ import shutil
 import struct
 import zlib
 import zipfile
+import hashlib
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -43,7 +44,7 @@ def icons():
 
 def package():
     icons()
-    files = ['core.js', 'feed.js', 'planning.js', 'calendar-import.js', 'background.js', 'manifest.json', 'dashboard.html', 'dashboard.js', 'style.css', 'readability.css', 'capture.js', 'popup.html', 'popup.js', 'popup.css']
+    files = ['core.js', 'feed.js', 'planning.js', 'calendar-import.js', 'background.js', 'manifest.json', 'dashboard.html', 'dashboard.js', 'style.css', 'readability.css', 'capture.js', 'popup.html', 'popup.js', 'popup.css', 'LICENSE']
     missing = [name for name in files if not (ROOT / name).is_file()]
     if missing or not (ROOT / 'data/events.json').is_file():
         raise SystemExit('Source files missing: ' + ', '.join(missing or ['data/events.json']))
@@ -72,6 +73,10 @@ def package():
                 entry.external_attr = 0o644 << 16
                 output.writestr(entry, (destination / name).read_bytes())
         print(f'Packaged {archive}')
+    checksums = ROOT / 'dist' / f'SHA256SUMS-{version}.txt'
+    archives = [ROOT / 'dist' / f'cse-radar-{version}-{target}.zip' for target in ('chromium', 'firefox')]
+    checksums.write_text(''.join(f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n' for path in archives), encoding='utf-8')
+    print(f'Checksums {checksums}')
 
 if __name__ == '__main__':
     import sys

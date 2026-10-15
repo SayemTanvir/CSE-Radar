@@ -88,8 +88,8 @@ async function main() {
   });
   const stored = { radarSaved: [fixture, { id: 'invalid' }], radarReminderHours: 24 };
   const alarms = new Map([['radar:reminder:obsolete', { name: 'radar:reminder:obsolete' }]]);
-  const notices = [], tabs = [], listeners = {};
-  const now = Date.parse('2030-01-10T02:00:00Z');
+  const notices = [], clearedNotices = [], tabs = [], listeners = {}, alarmCreates = [];
+  let now = Date.parse('2030-01-10T02:00:00Z');
   class FixedDate extends Date { static now() { return now; } }
   const listen = name => ({ addListener(callback) { listeners[name] = callback; } });
   const api = {
@@ -99,9 +99,9 @@ async function main() {
     }, onChanged: listen('storage') },
     alarms: {
       async getAll() { return [...alarms.values()]; }, async clear(name) { return alarms.delete(name); },
-      async create(name, info) { alarms.set(name, { name, ...info }); }, onAlarm: listen('alarm')
+      async create(name, info) { alarmCreates.push(name); alarms.set(name, { name, ...info, scheduledTime: info.when ?? now + info.periodInMinutes * 60000 }); }, onAlarm: listen('alarm')
     },
-    notifications: { async create(id, data) { notices.push({ id, data }); }, async clear() {}, onClicked: listen('click') },
+    notifications: { async create(id, data) { notices.push({ id, data }); }, async clear(id) { clearedNotices.push(id); }, onClicked: listen('click') },
     tabs: { async create(options) { tabs.push(options); } }, action: { onClicked: listen('action') },
     permissions: { async contains() { return false; }, onRemoved: listen('permissionsRemoved') },
     runtime: { getURL(value) { return 'chrome-extension://test/' + value; }, onInstalled: listen('install'), onStartup: listen('startup'), onMessage: listen('message') }
@@ -113,6 +113,18 @@ async function main() {
   assert.equal(alarms.has('radar:reconcile'), true);
   const reminder = [...alarms.values()].find(alarm => alarm.name.startsWith('radar:reminder:'));
   assert.ok(reminder); assert.equal(reminder.when, now + 1000);
+  alarmCreates.length = 0;
+  await sandbox.reconcile();
+  assert.deepEqual(alarmCreates, [], 'Unchanged alarms, including maintenance, must not be recreated.');
+  const originalDue = alarms.get(reminder.name).scheduledTime;
+  now += 500;
+  await sandbox.reconcile();
+  assert.equal(alarms.get(reminder.name).scheduledTime, originalDue, 'An already due lead time must not push its existing alarm forward.');
+  stored.radarReminderHours = 0.5;
+  await sandbox.reconcile();
+  assert.equal(alarms.get(reminder.name).scheduledTime, Date.parse(fixture.start) - 30 * 60000, 'A changed lead time must still move a reminder to its requested future time.');
+  stored.radarReminderHours = 24;
+  await sandbox.reconcile();
   await sandbox.deliver(reminder); await sandbox.deliver(reminder);
   assert.equal(notices.length, 1);
   await sandbox.reconcile(); assert.equal(alarms.has(reminder.name), false);
@@ -124,10 +136,56 @@ async function main() {
   assert.equal(alarms.has(reminder.name), false);
   listeners.click(notices[0].id); await sandbox.serial(async () => {});
   assert.equal(tabs[0].url, fixture.url);
+  listeners.click('radar:test'); await sandbox.serial(async () => {});
+  assert.equal(tabs[1].url, 'chrome-extension://test/dashboard.html');
+  assert.ok(clearedNotices.includes('radar:test'));
   stored.radarSaved = [{ ...fixture, status: 'cancelled' }];
   await sandbox.reconcile();
   assert.equal([...alarms.keys()].some(name => name.startsWith('radar:reminder:')), false);
   console.log('PASS background reconciles alarms, skips invalid data, delivers once, opens safe links, and handles cancellation');
+  stored.radarSaved = Array.from({ length: 550 }, (_, index) => ({
+    ...fixture, id: 'custom-capacity-' + index,
+    start: new Date(now + (index + 2) * 86400000).toISOString(),
+    end: new Date(now + (index + 3) * 86400000).toISOString(),
+    deadline: new Date(now + (index + 1) * 86400000).toISOString()
+  }));
+  stored.radarDelivered = {};
+  api.alarms.create = async (name, info) => {
+    if (!alarms.has(name) && alarms.size >= 500) throw new Error('An extension cannot have more than 500 active alarms.');
+    alarmCreates.push(name);
+    alarms.set(name, { name, ...info, scheduledTime: info.when ?? now + info.periodInMinutes * 60000 });
+  };
+  const capacitySave = await sandbox.mutateSaved({ type: 'radar:save', event: stored.radarSaved[549] });
+  assert.equal(capacitySave.ok, true, 'Saving many events must not fail after their data has already been committed.');
+  assert.equal(stored.radarSaved.length, 550);
+  const scheduled = new Set([...alarms.keys()].filter(name => name.startsWith('radar:reminder:')));
+  assert.equal(scheduled.size, 490);
+  assert.ok(alarms.size < 500);
+  assert.ok([...scheduled].some(name => name.includes('custom-capacity-0:deadline:')));
+  const fired = [...alarms.values()].filter(alarm => scheduled.has(alarm.name)).sort((a, b) => a.when - b.when)[0];
+  alarms.delete(fired.name); // A real one-shot alarm is removed before its handler runs.
+  await sandbox.deliver(fired);
+  const refilled = [...alarms.keys()].filter(name => name.startsWith('radar:reminder:'));
+  assert.equal(refilled.length, 490);
+  assert.equal(alarms.has(fired.name), false);
+  assert.ok(refilled.some(name => !scheduled.has(name)), 'Delivery must schedule the next pending event instead of dropping it.');
+  stored.radarSaved = Array.from({ length: 3 }, (_, index) => ({
+    ...fixture, id: 'custom-overdue-' + index,
+    start: new Date(now + 3600000).toISOString(), end: new Date(now + 7200000).toISOString(),
+    deadline: new Date(now + 1800000).toISOString()
+  }));
+  stored.radarDelivered = {};
+  await sandbox.reconcile();
+  const dueAlarms = [...alarms.values()].filter(alarm => alarm.name.startsWith('radar:reminder:'));
+  const originalTimes = new Map(dueAlarms.map(alarm => [alarm.name, alarm.scheduledTime]));
+  const dueAlarm = dueAlarms[0]; alarms.delete(dueAlarm.name);
+  now += 300;
+  alarmCreates.length = 0;
+  await sandbox.deliver(dueAlarm);
+  assert.deepEqual(alarmCreates, [], 'Delivery must not recreate the other five overdue reminders.');
+  for (const alarm of alarms.values()) if (alarm.name.startsWith('radar:reminder:')) assert.equal(alarm.scheduledTime, originalTimes.get(alarm.name));
+  console.log('PASS more than 500 reminders retain saved data and use a rolling queue that refills after delivery');
+  console.log('PASS unchanged alarms are reused and overdue reminders are not postponed during delivery');
   console.log('All CSE Radar core tests passed.');
 }
 module.exports = main();

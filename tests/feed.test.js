@@ -183,6 +183,8 @@ async function main() {
   assert.equal(receivedDraft.draft.candidate.end, null); assert.equal(receivedDraft.draft.createdAt, undefined);
   assert.deepEqual(bg.stored.radarSaved, savedBeforeDraft); assert.deepEqual(bg.stored.radarCatalog, catalogBeforeDraft);
   assert.ok(bg.stored.radarDrafts[0].createdAt > Date.parse(capture.capturedAt));
+  assert.ok(alarms.has('radar:drafts'), 'Abandoned drafts need a scheduled expiry without another user action.');
+  assert.equal(alarms.get('radar:drafts').when, bg.stored.radarDrafts[0].createdAt + 24 * 3600000);
   const malformedCaptures = [
     { ...capture, pageUrl: 'javascript:alert(1)' }, { ...capture, pageUrl: 'https://user:password@example.org/' },
     { ...capture, candidates: [{ ...partial, url: 'http://example.org/' }] },
@@ -199,6 +201,9 @@ async function main() {
   assert.equal((await send({ type: 'radar:draft:create', capture, candidateIndex: 99 })).ok, false);
   assert.equal(listeners.message({ type: 'radar:draft:get', id: createdDraft.id }, { id: 'external' }, () => {}), false);
   bg.stored.radarDrafts[0].createdAt = Date.now() - 24 * 3600000;
+  listeners.alarm({ name: 'radar:drafts' }); await sandbox.serial(async () => {});
+  assert.equal(bg.stored.radarDrafts.length, 0, 'The expiry alarm must erase an abandoned draft while the browser stays open.');
+  assert.equal(alarms.has('radar:drafts'), false);
   const expiredDraft = await send({ type: 'radar:draft:get', id: createdDraft.id });
   assert.equal(expiredDraft.ok, false); assert.match(expiredDraft.status.error, /expired/);
   assert.equal(bg.stored.radarDrafts.length, 0);

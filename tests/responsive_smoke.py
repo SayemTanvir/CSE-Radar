@@ -9,7 +9,7 @@ import uuid
 from urllib.request import urlopen
 
 import websockets
-from ui_smoke import ARTIFACTS, CHROME, ROOT, CDP, QuietHandler, QuietServer, wait_debug_port
+from ui_smoke import ARTIFACTS, CHROME, ROOT, CDP, QuietHandler, QuietServer, wait_debug_port, stop_browser
 
 
 async def touch(cdp, selector):
@@ -143,8 +143,7 @@ def main():
         asyncio.run(exercise(endpoint,f'http://127.0.0.1:{server.server_port}'))
     finally:
         if browser:
-            browser.terminate()
-            browser.wait(timeout=15)
+            stop_browser(browser)
         server.shutdown()
         assert profile.resolve().is_relative_to(ARTIFACTS.resolve())
         shutil.rmtree(profile,ignore_errors=True)

@@ -25,6 +25,23 @@ ARTIFACTS = ROOT / 'artifacts'
 CHROME = Path(os.environ.get('RADAR_TEST_BROWSER', r'C:\Program Files\Google\Chrome\Application\chrome.exe'))
 
 
+def stop_browser(browser):
+    """Stop only the disposable subprocess started by this test."""
+    if browser.poll() is not None:
+        return
+    browser.terminate()
+    try:
+        browser.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        if os.name == 'nt':
+            subprocess.run(['taskkill', '/PID', str(browser.pid), '/T', '/F'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=15, check=False)
+        else:
+            browser.kill()
+        browser.wait(timeout=15)
+
+
 def wait_debug_port(profile, browser):
     """Chrome creates the port file before releasing its Windows write lock."""
     port_file = Path(profile) / 'DevToolsActivePort'
@@ -217,8 +234,7 @@ def main():
             endpoint = next(target['webSocketDebuggerUrl'] for target in targets if target['type'] == 'page')
             asyncio.run(exercise(endpoint, f'http://127.0.0.1:{server.server_port}'))
         finally:
-            browser.terminate()
-            browser.wait(timeout=15)
+            stop_browser(browser)
             server.shutdown()
     finally:
         assert profile.resolve().is_relative_to(ARTIFACTS.resolve())
